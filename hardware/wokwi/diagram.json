@@ -1,0 +1,311 @@
+{
+  "version": 1,
+  "author": "SightSeeker (team SYNTAX TERROR)",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-arduino-uno",
+      "id": "uno",
+      "top": 180,
+      "left": 20,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-hc-sr04",
+      "id": "sonar",
+      "top": -60,
+      "left": 60,
+      "attrs": {
+        "distance": "120"
+      }
+    },
+    {
+      "type": "wokwi-ssd1306",
+      "id": "oled",
+      "top": -50,
+      "left": 330,
+      "attrs": {
+        "i2cAddress": "0x3c"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "lfwd",
+      "top": 180,
+      "left": 380,
+      "attrs": {
+        "color": "green",
+        "label": "L FWD"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_lfwd",
+      "top": 260,
+      "left": 370,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "lrev",
+      "top": 180,
+      "left": 450,
+      "attrs": {
+        "color": "red",
+        "label": "L REV"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_lrev",
+      "top": 260,
+      "left": 440,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "lspd",
+      "top": 180,
+      "left": 520,
+      "attrs": {
+        "color": "yellow",
+        "label": "L SPEED"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_lspd",
+      "top": 260,
+      "left": 510,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "rfwd",
+      "top": 330,
+      "left": 380,
+      "attrs": {
+        "color": "green",
+        "label": "R FWD"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_rfwd",
+      "top": 410,
+      "left": 370,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "rrev",
+      "top": 330,
+      "left": 450,
+      "attrs": {
+        "color": "red",
+        "label": "R REV"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_rrev",
+      "top": 410,
+      "left": 440,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "rspd",
+      "top": 330,
+      "left": 520,
+      "attrs": {
+        "color": "yellow",
+        "label": "R SPEED"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_rspd",
+      "top": 410,
+      "left": 510,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "uno:7",
+      "r_lfwd:1",
+      "green",
+      []
+    ],
+    [
+      "r_lfwd:2",
+      "lfwd:A",
+      "green",
+      []
+    ],
+    [
+      "lfwd:C",
+      "uno:GND.2",
+      "black",
+      []
+    ],
+    [
+      "uno:8",
+      "r_lrev:1",
+      "red",
+      []
+    ],
+    [
+      "r_lrev:2",
+      "lrev:A",
+      "red",
+      []
+    ],
+    [
+      "lrev:C",
+      "uno:GND.2",
+      "black",
+      []
+    ],
+    [
+      "uno:5",
+      "r_lspd:1",
+      "yellow",
+      []
+    ],
+    [
+      "r_lspd:2",
+      "lspd:A",
+      "yellow",
+      []
+    ],
+    [
+      "lspd:C",
+      "uno:GND.2",
+      "black",
+      []
+    ],
+    [
+      "uno:9",
+      "r_rfwd:1",
+      "green",
+      []
+    ],
+    [
+      "r_rfwd:2",
+      "rfwd:A",
+      "green",
+      []
+    ],
+    [
+      "rfwd:C",
+      "uno:GND.2",
+      "black",
+      []
+    ],
+    [
+      "uno:10",
+      "r_rrev:1",
+      "red",
+      []
+    ],
+    [
+      "r_rrev:2",
+      "rrev:A",
+      "red",
+      []
+    ],
+    [
+      "rrev:C",
+      "uno:GND.2",
+      "black",
+      []
+    ],
+    [
+      "uno:6",
+      "r_rspd:1",
+      "yellow",
+      []
+    ],
+    [
+      "r_rspd:2",
+      "rspd:A",
+      "yellow",
+      []
+    ],
+    [
+      "rspd:C",
+      "uno:GND.2",
+      "black",
+      []
+    ],
+    [
+      "sonar:VCC",
+      "uno:5V",
+      "red",
+      []
+    ],
+    [
+      "sonar:GND",
+      "uno:GND.1",
+      "black",
+      []
+    ],
+    [
+      "sonar:TRIG",
+      "uno:11",
+      "orange",
+      []
+    ],
+    [
+      "sonar:ECHO",
+      "uno:12",
+      "purple",
+      []
+    ],
+    [
+      "oled:VCC",
+      "uno:5V",
+      "red",
+      []
+    ],
+    [
+      "oled:GND",
+      "uno:GND.1",
+      "black",
+      []
+    ],
+    [
+      "oled:SDA",
+      "uno:A4",
+      "blue",
+      []
+    ],
+    [
+      "oled:SCL",
+      "uno:A5",
+      "cyan",
+      []
+    ]
+  ],
+  "dependencies": {}
+}
