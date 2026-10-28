@@ -67,7 +67,9 @@ flowchart LR
 
 The simulation runs the real firmware logic on a simulated Arduino Uno with a simulated HC-SR04 and OLED.
 
-**Run it in the browser (no install):**
+**▶ Open the live simulation: [https://wokwi.com/projects/479147376881059841](https://wokwi.com/projects/479147376881059841)** (press ▶ Start; the demo begins after 3 s)
+
+**Or build it yourself in the browser (no install):**
 1. Go to [wokwi.com](https://wokwi.com) → **New Project** → **Arduino Uno**.
 2. Replace `sketch.ino` with [`wokwi/sketch.ino`](wokwi/sketch.ino), and replace `diagram.json` (tab next to it) with [`wokwi/diagram.json`](wokwi/diagram.json).
 3. Click the **Library Manager** tab → add **Adafruit SSD1306** and **Adafruit GFX Library** (listed in [`wokwi/libraries.txt`](wokwi/libraries.txt)).

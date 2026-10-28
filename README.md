@@ -86,6 +86,8 @@ LiDAR / range ─► free-space histogram ┘   (+ semantic map,     + safety la
 
 ## Hardware: rover design and simulation
 
+**▶ Live Wokwi simulation of the rover firmware: [https://wokwi.com/projects/479147376881059841](https://wokwi.com/projects/479147376881059841)**
+
 The rover's firmware, wiring diagram, component specs, a **Wokwi simulation** you can run in the browser, a **3D rover twin** (`rover_3d.html`), its limitations and the physical build plan are in **[hardware/README.md](hardware/README.md)**.
 
 ![Wiring diagram](hardware/docs/wiring_diagram.png)
