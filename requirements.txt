@@ -1,0 +1,7 @@
+# SightSeeker demo dependencies (Python 3.10+; tested target: Python 3.12 on Windows)
+ultralytics>=8.0.0      # YOLO26 / YOLOE (pulls in PyTorch)
+opencv-python>=4.8
+numpy>=1.24
+pygame>=2.5
+pyserial>=3.5           # optional: only needed for --serial (Arduino rover)
+# optional, installed by launch.bat option 6: vosk + sounddevice (voice goals, press V)

@@ -1,0 +1,22 @@
+# Model weights and speech model: large, downloaded by `launch.bat` option 6 (download_models.py)
+*.pt
+*.ts
+*.onnx
+*_openvino_model/
+vosk-model-*/
+
+# Personal / generated files
+camera_calibration.json
+recordings/
+sightseeker_screenshot_*.png
+detected_*.png
+runs/
+_backup_before_fixes/
+
+# Python / OS
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+Thumbs.db
