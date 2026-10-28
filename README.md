@@ -145,3 +145,8 @@ The rover's firmware, wiring diagram, component specs, a **Wokwi simulation** yo
 | `DEMO_VIDEO_SCRIPT.md` | Shot list and voice-over for the demo video |
 | `*.pt`, `mobileclip2_b.ts` | Model weights (YOLO26 sizes, YOLOE and its text encoder) downloaded by option 6. `yolov8n.pt` is the offline fallback |
 | `LICENSE`, `.gitignore` | MIT licence; keeps model weights, recordings and calibration out of git |
+
+## Presentation
+
+- Prototype-round deck: [docs/SightSeeker_PrototypeRound.pdf](docs/SightSeeker_PrototypeRound.pdf)
+- Interactive pitch: `SightSeeker_Pitch.html` (open in a browser, or `launch.bat` option 1)

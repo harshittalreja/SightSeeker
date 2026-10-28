@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SightSeeker — Interactive AI Presentation</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            user-select: none;
+        }
+
+        :root {
+            --primary: #008eb8;
+            --primary-dark: #006887;
+            --primary-light: #e0f4fb;
+            --accent-cyan: #00f2fe;
+            --accent-green: #10b981;
+            --accent-purple: #8b5cf6;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --bg-body: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e2e8f0;
+            --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --shadow-lg: 0 16px 40px rgba(0, 142, 184, 0.12), 0 4px 16px rgba(0, 0, 0, 0.05);
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Header */
+        header {
+            height: 60px;
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            z-index: 100;
+        }
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .logo-badge {
+            background: linear-gradient(135deg, var(--primary), #0284c7);
+            color: white;
+            font-weight: 800;
+            padding: 6px 14px;
+            border-radius: 10px;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 12px rgba(0, 142, 184, 0.3);
+        }
+        .event-tag {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .sound-btn {
+            background: #f1f5f9;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #334155;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .sound-btn:hover { background: #e2e8f0; }
+        .slide-counter {
+            font-family: 'Consolas', monospace;
+            font-weight: 800;
+            font-size: 14px;
+            color: var(--primary);
+            background: var(--primary-light);
+            padding: 5px 14px;
+            border-radius: 20px;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            width: 100%;
+            height: 4px;
+            background: #e2e8f0;
+            position: relative;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 12.5%;
+            background: linear-gradient(90deg, var(--primary), #38bdf8);
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Main Slide Stage */
+        main {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 40px 75px;
+        }
+
+        .slide {
+            position: absolute;
+            width: calc(100% - 80px);
+            max-width: 1200px;
+            height: calc(100% - 24px);
+            background: var(--card-bg);
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-lg);
+            padding: 40px 48px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(20px) scale(0.98);
+            transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .slide.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0) scale(1);
+        }
+
+        .slide-header {
+            margin-bottom: 20px;
+        }
+        .slide-tag {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: inline-block;
+            margin-bottom: 4px;
+        }
+        .slide-title {
+            font-size: 30px;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.2;
+            letter-spacing: -0.5px;
+        }
+        .slide-subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .slide-body {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* Grids */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; width: 100%; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 100%; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; width: 100%; }
+
+        .card {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            transition: all 0.25s ease;
+        }
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+            border-color: #cbd5e1;
+        }
+        .card-icon { font-size: 26px; margin-bottom: 8px; }
+        .card-title { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 6px; }
+        .card-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+        /* ================= INTERACTIVE WIDGETS ================= */
+
+        /* 1. Slide 2: Interactive Obstacle Canvas */
+        .sim-demo-card {
+            background: #ffffff;
+            border: 2px dashed var(--primary);
+            border-radius: 16px;
+            padding: 16px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .sim-canvas-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        #obstacleCanvas {
+            width: 100%;
+            height: 190px;
+            background: #0f172a;
+            border-radius: 10px;
+            cursor: crosshair;
+        }
+        .sim-instruction {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        /* 2. Slide 4: Interactive Architecture Pipeline */
+        .pipeline-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+        }
+        .pipeline-steps {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+        }
+        .p-step {
+            flex: 1;
+            background: #ffffff;
+            border: 2px solid var(--border);
+            border-radius: 14px;
+            padding: 14px 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .p-step:hover, .p-step.selected {
+            border-color: var(--primary);
+            background: var(--primary-light);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 142, 184, 0.15);
+        }
+        .p-step.selected h4 { color: var(--primary); }
+        .p-step h4 { font-size: 13px; font-weight: 800; color: #0f172a; margin-top: 4px; }
+        .p-step p { font-size: 11px; color: var(--text-muted); }
+        .pipeline-details {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            animation: fadeIn 0.3s ease;
+        }
+        .p-info h5 { font-size: 15px; font-weight: 800; color: var(--primary); margin-bottom: 4px; }
+        .p-info p { font-size: 13px; color: #334155; }
+        .p-badge-list { display: flex; gap: 8px; }
+        .p-badge {
+            background: white;
+            border: 1px solid var(--border);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: 'Consolas', monospace;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        /* 3. Slide 5: Interactive ROI Calculator */
+        .calculator-card {
+            background: linear-gradient(135deg, #ffffff, #f0fdf4);
+            border: 1px solid #bbf7d0;
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .slider-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .calc-slider {
+            width: 100%;
+            height: 8px;
+            accent-color: var(--accent-green);
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        .calc-results {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 6px;
+        }
+        .calc-res-item {
+            background: white;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid #dcfce7;
+            text-align: center;
+        }
+        .calc-val {
+            font-size: 26px;
+            font-weight: 900;
+            color: var(--accent-green);
+            font-family: 'Consolas', monospace;
+        }
+        .calc-lbl { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; }
+
+        /* 4. Slide 6: Interactive Tab Switcher */
+        .mode-switcher {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .mode-tab {
+            padding: 8px 18px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: white;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .mode-tab.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(0, 142, 184, 0.25);
+        }
+        .mode-content {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            min-height: 200px;
+        }
+
+        /* Bottom Nav */
+        .nav-bar {
+            position: absolute;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: white;
+            padding: 8px 22px;
+            border-radius: 40px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--border);
+            z-index: 100;
+        }
+        .nav-btn {
+            background: #f1f5f9;
+            border: none;
+            color: #1e293b;
+            font-size: 16px;
+            font-weight: bold;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover {
+            background: var(--primary);
+            color: white;
+            transform: scale(1.08);
+        }
+        .dots-container { display: flex; gap: 8px; }
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #cbd5e1;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .dot.active {
+            background: var(--primary);
+            width: 24px;
+            border-radius: 10px;
+        }
+
+        /* ================= SPARKY MASCOT (AUTONOMOUS) ================= */
+        #mascotEntity {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100px;
+            height: 120px;
+            z-index: 1000;
+            pointer-events: none;
+            transition: transform 0.08s linear;
+        }
+
+        /* Speech Bubble attached above Mascot */
+        .mascot-bubble {
+            position: absolute;
+            bottom: 8px;
+            right: 86px;
+            width: 290px;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border: 2px solid var(--primary);
+            border-radius: 16px;
+            padding: 12px 16px;
+            box-shadow: 0 10px 30px rgba(0, 142, 184, 0.2);
+            pointer-events: none;            /* never blocks clicks on the slide underneath */
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+        .mascot-bubble.hidden { opacity: 0; transform: translateY(6px); }
+        #mascotEntity.off { display: none; }
+        .source-note { font-size: 10.5px; color: var(--text-muted); margin-top: 6px; }
+        .source-note a { color: var(--primary); }
+        .mascot-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: 22px;
+            right: -9px;
+            border-width: 8px 0 8px 9px;
+            border-style: solid;
+            border-color: transparent transparent transparent var(--primary);
+            display: block;
+            width: 0;
+        }
+        #mascotEntity.bubble-right .mascot-bubble { right: auto; left: 86px; }
+        #mascotEntity.bubble-right .mascot-bubble::after { right: auto; left: -9px; border-width: 8px 9px 8px 0; border-color: transparent var(--primary) transparent transparent; }
+        .bubble-name {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        .bubble-text {
+            font-size: 11.5px;
+            color: #1e293b;
+            font-weight: 600;
+            line-height: 1.4;
+        }
+
+        /* Robot Body Container */
+        .robot-body {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: auto;
+            cursor: grab;
+            transform: scale(0.66);
+            transform-origin: 50% 100%;
+            filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.16));
+        }
+        .robot-body:active { cursor: grabbing; }
+
+        /* Antenna */
+        .antenna {
+            position: absolute;
+            top: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 16px;
+            background: #94a3b8;
+            border-radius: 2px;
+        }
+        .antenna-bulb {
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 14px;
+            height: 14px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 14px var(--accent-cyan);
+            animation: pulseGlow 1.2s infinite;
+        }
+
+        /* Robot Head */
+        .head {
+            position: absolute;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 86px;
+            height: 68px;
+            background: linear-gradient(145deg, #ffffff, #e2e8f0);
+            border: 3px solid #cbd5e1;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.9);
+            transition: transform 0.1s ease;
+        }
+
+        /* Visor & Eyes */
+        .visor {
+            width: 68px;
+            height: 40px;
+            background: #0f172a;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 0 6px;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+        }
+        .eye {
+            width: 24px;
+            height: 24px;
+            background: #1e293b;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .pupil {
+            width: 14px;
+            height: 14px;
+            background: radial-gradient(circle, #38bdf8 30%, #0284c7 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 10px #38bdf8;
+            transition: transform 0.03s linear;
+        }
+        .pupil::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        /* Jetpack & Thruster Flame */
+        .thruster-left, .thruster-right {
+            position: absolute;
+            bottom: 4px;
+            width: 12px;
+            height: 16px;
+            background: #475569;
+            border-radius: 4px;
+        }
+        .thruster-left { left: 24px; }
+        .thruster-right { right: 24px; }
+        .flame {
+            position: absolute;
+            bottom: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 8px;
+            height: 16px;
+            background: linear-gradient(to bottom, #00f2fe, rgba(0, 242, 254, 0));
+            border-radius: 0 0 8px 8px;
+            animation: flameFlicker 0.15s infinite alternate;
+        }
+        @keyframes flameFlicker {
+            from { height: 12px; opacity: 0.8; }
+            to { height: 18px; opacity: 1; }
+        }
+
+        /* Mode Pill on Mascot */
+        .mascot-ai-mode {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 142, 184, 0.9);
+            color: white;
+            font-size: 8px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="logo-area">
+            <div class="logo-badge">SightSeeker</div>
+            <span class="event-tag">Hack in Hills '26 · Galgotias University</span>
+        </div>
+        <div class="header-controls">
+            <button class="sound-btn" id="btnToggleSound">🔊 Audio: ON</button>
+            <button class="sound-btn" id="btnMascotFollow" title="Cycle Sparky: roam / docked / hidden (M)">🤖 Sparky: ROAM</button>
+            <div class="slide-counter" id="counter">01 / 08</div>
+        </div>
+    </header>
+
+    <!-- Progress -->
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <!-- Main Slides Container -->
+    <main>
+
+        <!-- SLIDE 1: Team & Project -->
+        <section class="slide active" id="slide-1" data-mascot="Hello judges! I'm Sparky. Let's see how SightSeeker turns what a camera sees into autonomous navigation!">
+            <div class="slide-header">
+                <span class="slide-tag">Hack in Hills '26 · Official Submission</span>
+                <h1 class="slide-title">SightSeeker: Vision-Guided Autonomous Navigator</h1>
+                <p class="slide-subtitle">Tell the robot what to find. It looks, maps, plans, avoids obstacles and gets there.</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card" style="border-left: 4px solid var(--primary); background: #ffffff;">
+                        <div class="card-icon">👤</div>
+                        <h3 class="card-title">Lead Developer & Solo Participant</h3>
+                        <p class="card-desc" style="font-size: 18px; font-weight: 800; color: #0f172a;">HARSHIT</p>
+                        <p class="card-desc" style="margin-top: 4px;">Track: Vision-Based Autonomous Robot · Galgotias University</p>
+                        <div style="margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <span class="p-badge" style="color: var(--primary);">Computer Vision</span>
+                            <span class="p-badge" style="color: var(--primary);">Autonomous Pathfinding</span>
+                            <span class="p-badge" style="color: var(--primary);">WebGL 3D Sim</span>
+                        </div>
+                    </div>
+                    <div class="card" style="border-left: 4px solid var(--accent-green); background: #ffffff;">
+                        <div class="card-icon">🚀</div>
+                        <h3 class="card-title">Core Breakthrough</h3>
+                        <p class="card-desc">Most mobile robots need a pre-built map and hard-coded waypoints. SightSeeker uses <strong>YOLO26 object detection + language grounding</strong>: the operator just says <em>"find the red barrel"</em>, and the robot explores, recognises the object and drives to it while avoiding obstacles.</p>
+                        <div style="margin-top: 14px; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 10px 14px; border-radius: 10px; font-size: 12px; color: #065f46; font-weight: 700;">
+                            ✨ 1,000 randomized 3D missions: 100% reached the goal, 0 collisions
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 2: Problem Statement with Interactive Canvas -->
+        <section class="slide" id="slide-2" data-mascot="Click the dark arena to drop obstacles. The rover's range sensors (the rays) see them and it re-plans around them live!">
+            <div class="slide-header">
+                <span class="slide-tag">Problem Statement & Live Interactive Demo</span>
+                <h1 class="slide-title">Static Maps Fail. Vision Solves It.</h1>
+                <p class="slide-subtitle">Click anywhere in the simulation arena below to spawn an obstacle!</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="sim-demo-card">
+                        <div class="sim-canvas-header">
+                            <span>🎮 INTERACTIVE OBSTACLE RADAR</span>
+                            <span style="color: var(--accent-green);" id="radarStatus">● LIVE</span>
+                        </div>
+                        <canvas id="obstacleCanvas"></canvas>
+                        <div class="sim-instruction">👆 Click on the arena to drop new obstacle blocks! The bot will recalculate its avoidance vector live.</div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 14px;">
+                        <div class="card">
+                            <h3 class="card-title">💥 The Static Floorplan Trap</h3>
+                            <p class="card-desc">Industrial robots crash when pallets or humans shift into their blind spots. SightSeeker replaces brittle coordinates with real-time visual perception.</p>
+                        </div>
+                        <div class="card">
+                            <h3 class="card-title">⚡ No Beacons, No Pre-Built Maps</h3>
+                            <p class="card-desc">Warehouses, hospitals and disaster-response teams can drop a rover into a new space: it explores, builds its own map and finds objects by name — no floor markers or mapping run first.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 3: Proposed Solution -->
+        <section class="slide" id="slide-3" data-mascot="Four layers: plain-English goals, YOLO26 eyes, a free-space planner with a safety stop, and a 3D world to prove it all works.">
+            <div class="slide-header">
+                <span class="slide-tag">Proposed Solution</span>
+                <h1 class="slide-title">SightSeeker: Perception & Decision Engine</h1>
+                <p class="slide-subtitle">Four tightly coupled layers delivering autonomous physical intelligence.</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-4">
+                    <div class="card" style="border-top: 4px solid #38bdf8;">
+                        <div class="card-icon">🗣️</div>
+                        <h3 class="card-title">Natural Language</h3>
+                        <p class="card-desc">Language grounding maps goals like <em>"find my phone"</em> to detector classes (synonyms, colours, typo-tolerant). Built so a VLM such as CLIP can slot in later.</p>
+                    </div>
+                    <div class="card" style="border-top: 4px solid var(--accent-green);">
+                        <div class="card-icon">👁️</div>
+                        <h3 class="card-title">YOLO26 Vision</h3>
+                        <p class="card-desc">YOLO26, Ultralytics' newest detector, finds 80 COCO object classes in real time with boxes and confidence scores: the large model on an NVIDIA GPU, the nano model on a plain CPU.</p>
+                    </div>
+                    <div class="card" style="border-top: 4px solid var(--accent-orange);">
+                        <div class="card-icon">🧭</div>
+                        <h3 class="card-title">Free-Space Planner</h3>
+                        <p class="card-desc">A Vector Field Histogram (VFH) planner picks the open direction closest to the goal from a 360° LiDAR scan; a separate safety layer always leaves room to stop.</p>
+                    </div>
+                    <div class="card" style="border-top: 4px solid var(--accent-purple);">
+                        <div class="card-icon">🌐</div>
+                        <h3 class="card-title">120 m 3D Simulation</h3>
+                        <p class="card-desc">Validated in a 120 m WebGL warehouse with a robot camera, LiDAR and its own map: 1,000 random trials, 100% success, 0 collisions.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 4: Interactive Architecture Pipeline -->
+        <section class="slide" id="slide-4" data-mascot="Click each stage of the pipeline to see the exact algorithm behind every step of the Sense-Think-Act loop.">
+            <div class="slide-header">
+                <span class="slide-tag">Technical Architecture (Interactive)</span>
+                <h1 class="slide-title">The Sense → Think → Act Feedback Pipeline</h1>
+                <p class="slide-subtitle">Click any pipeline stage below to inspect its algorithms and live specs.</p>
+            </div>
+            <div class="slide-body">
+                <div class="pipeline-container">
+                    <div class="pipeline-steps">
+                        <div class="p-step selected" onclick="selectPipeline(0)">
+                            <div style="font-size: 24px;">📷</div>
+                            <h4>1. SENSE</h4>
+                            <p>Camera & LiDAR</p>
+                        </div>
+                        <div class="p-step" onclick="selectPipeline(1)">
+                            <div style="font-size: 24px;">👁️</div>
+                            <h4>2. PERCEIVE</h4>
+                            <p>YOLO26 + language</p>
+                        </div>
+                        <div class="p-step" onclick="selectPipeline(2)">
+                            <div style="font-size: 24px;">🧠</div>
+                            <h4>3. THINK</h4>
+                            <p>FSM Logic</p>
+                        </div>
+                        <div class="p-step" onclick="selectPipeline(3)">
+                            <div style="font-size: 24px;">🧭</div>
+                            <h4>4. PLAN</h4>
+                            <p>Free-space planner</p>
+                        </div>
+                        <div class="p-step" onclick="selectPipeline(4)">
+                            <div style="font-size: 24px;">⚙️</div>
+                            <h4>5. ACT</h4>
+                            <p>Motor Control</p>
+                        </div>
+                    </div>
+                    <div class="pipeline-details" id="pipelineDetails">
+                        <div class="p-info">
+                            <h5 id="pTitle">Stage 1: Sensing</h5>
+                            <p id="pDesc">Webcam frames via OpenCV on the real pipeline; in simulation, a robot camera plus a 72-ray 360° LiDAR.</p>
+                        </div>
+                        <div class="p-badge-list" id="pBadges">
+                            <span class="p-badge">OpenCV</span>
+                            <span class="p-badge">Webcam / sim camera</span>
+                            <span class="p-badge">72-ray LiDAR (sim)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 5: Interactive Market & ROI Calculator -->
+        <section class="slide" id="slide-5" data-mascot="Drag the slider to size a fleet and see the labour hours and costs it could save (illustrative model).">
+            <div class="slide-header">
+                <span class="slide-tag">Market Sizing & Interactive ROI Calculator</span>
+                <h1 class="slide-title">Multi-Billion Dollar Commercial Opportunity</h1>
+                <p class="slide-subtitle">Autonomous mobile robot (AMR) market projected to reach $18.9B by 2032 (21.8% CAGR, Allied Market Research).</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="calculator-card">
+                        <div class="slider-row">
+                            <span style="font-size: 14px; font-weight: 800; color: #0f172a;">Fleet Size (Rovers)</span>
+                            <span id="sliderFleetVal" style="font-size: 18px; font-weight: 900; color: var(--accent-green); font-family: 'Consolas', monospace;">12 Units</span>
+                        </div>
+                        <input type="range" min="2" max="60" value="12" class="calc-slider" id="calcSlider" oninput="updateCalculator(this.value)">
+                        <div class="calc-results">
+                            <div class="calc-res-item">
+                                <div class="calc-val" id="calcSavings">$345,600</div>
+                                <div class="calc-lbl">Annual Labor Savings</div>
+                            </div>
+                            <div class="calc-res-item">
+                                <div class="calc-val" id="calcHours">17,280 hrs</div>
+                                <div class="calc-lbl">Hours Saved / Year</div>
+                            </div>
+                        </div>
+                        <div class="source-note">Illustrative model: each rover takes over ~4 h/day of manual material moving, 360 days a year, at $20/h.</div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div class="card">
+                            <h4 class="card-title">📈 $18.9B AMR Market by 2032</h4>
+                            <p class="card-desc">Driven by logistics labour shortages, e-commerce fulfilment and Industry 4.0 automation. Forecasts vary by firm: MarketsandMarkets puts it at $7.1B by 2032.</p>
+                            <div class="source-note">Sources: Allied Market Research (2023), MarketsandMarkets (2026).</div>
+                        </div>
+                        <div class="card">
+                            <h4 class="card-title">💰 Recurring Revenue Model</h4>
+                            <p class="card-desc">B2B SaaS subscription for AI vision model fine-tuning, cloud telemetry fleet dashboards, and sim-to-real transfer consulting.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 6: Interactive Web3 & Gaming Expansion -->
+        <section class="slide" id="slide-6" data-mascot="Click the tabs: where SightSeeker can go next for gaming, Web3 and real hardware.">
+            <div class="slide-header">
+                <span class="slide-tag">Roadmap & Theme Alignment (Interactive)</span>
+                <h1 class="slide-title">Where SightSeeker Goes Next</h1>
+                <p class="slide-subtitle">What exists today, and how it extends to gaming, Web3 and physical robots.</p>
+            </div>
+            <div class="slide-body" style="flex-direction: column; align-items: stretch;">
+                <div class="mode-switcher">
+                    <button class="mode-tab active" onclick="switchThemeMode('gaming')">🎮 Gaming & Virtual Worlds</button>
+                    <button class="mode-tab" onclick="switchThemeMode('web3')">⛓️ Web3 & DePIN Swarms</button>
+                    <button class="mode-tab" onclick="switchThemeMode('hardware')">🤖 Sim-to-Real Hardware</button>
+                </div>
+                <div class="mode-content" id="modeContent">
+                    <!-- Injected dynamically -->
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 7: Live Prototype & Verification -->
+        <section class="slide" id="slide-7" data-mascot="Not just slides: a 3D simulator, a 2D simulator and a real YOLO26 Vision Brain on the webcam. Let's demo it!">
+            <div class="slide-header">
+                <span class="slide-tag">Prototype & Verification</span>
+                <h1 class="slide-title">Proven Prototypes Ready for Demo</h1>
+                <p class="slide-subtitle">Three fully developed codebases ready to demonstrate to judges.</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-3">
+                    <div class="card" style="border: 2px solid var(--primary); background: #ffffff;">
+                        <div style="font-size: 28px; margin-bottom: 8px;">🌐</div>
+                        <h3 class="card-title" style="color: var(--primary);">SightSeeker 3D Simulator</h3>
+                        <p class="card-desc">120 m warehouse, 28 objects, robot camera with detector boxes, 360° LiDAR, decision log, its own map, and a built-in randomized benchmark.</p>
+                        <div style="margin-top: 14px; font-weight: 700; color: var(--accent-green); font-size: 12px;">✅ Runs offline in the browser</div>
+                    </div>
+                    <div class="card" style="border: 2px solid var(--accent-green); background: #ffffff;">
+                        <div style="font-size: 28px; margin-bottom: 8px;">👁️</div>
+                        <h3 class="card-title" style="color: var(--accent-green);">Vision Brain (Webcam)</h3>
+                        <p class="card-desc">Real YOLO26 detections on the laptop camera become decisions: TURN LEFT / FORWARD / AVOID / STOP, plus left/right wheel commands.</p>
+                        <div style="margin-top: 14px; font-weight: 700; color: var(--accent-green); font-size: 12px;">✅ Real camera, real detections</div>
+                    </div>
+                    <div class="card" style="border: 2px solid var(--accent-orange); background: #ffffff;">
+                        <div style="font-size: 28px; margin-bottom: 8px;">🕹️</div>
+                        <h3 class="card-title" style="color: var(--accent-orange);">2D Simulator (Pygame)</h3>
+                        <p class="card-desc">Camera cone + 32-ray proximity ring, frontier exploration and target memory. 300 headless trials: 100% success, 0 collisions.</p>
+                        <div style="margin-top: 14px; font-weight: 700; color: var(--accent-green); font-size: 12px;">✅ Runs in launch.bat</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 8: Thank You -->
+        <section class="slide" id="slide-8" data-mascot="Thank you, judges! Harshit is ready for the live demo and your technical questions.">
+            <div class="slide-header" style="text-align: center;">
+                <span class="slide-tag">Hack in Hills '26 · Finale Presentation</span>
+                <h1 class="slide-title" style="font-size: 40px;">Thank You!</h1>
+                <p class="slide-subtitle" style="font-size: 16px;">SightSeeker: Where AI Vision Meets Autonomous Navigation</p>
+            </div>
+            <div class="slide-body" style="justify-content: center;">
+                <div class="card" style="text-align: center; max-width: 480px; padding: 28px;">
+                    <div style="font-size: 44px; margin-bottom: 8px;">🏆</div>
+                    <h3 style="font-size: 22px; font-weight: 800; color: #0f172a;">HARSHIT</h3>
+                    <p style="font-size: 14px; color: var(--text-muted); margin-top: 4px;">Galgotias University · Hack in Hills '26</p>
+                    <div style="margin-top: 18px; display: inline-block; background: var(--primary-light); color: var(--primary); font-weight: 800; padding: 8px 24px; border-radius: 20px; font-size: 13px;">
+                        Ready for Live Demo & Q&A!
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Bottom Navigation -->
+    <div class="nav-bar">
+        <button class="nav-btn" id="prevBtn" title="Previous Slide (Left Arrow)">❮</button>
+        <div class="dots-container" id="dotsContainer"></div>
+        <button class="nav-btn" id="nextBtn" title="Next Slide (Right Arrow / Space)">❯</button>
+    </div>
+
+    <!-- AUTONOMOUS ROAMING SPARKY MASCOT -->
+    <div id="mascotEntity">
+        <!-- Attached Speech Bubble -->
+        <div class="mascot-bubble" id="speechBubble">
+            <div class="bubble-name">
+                <span>🤖 SPARKY · AI ROVER</span>
+                <span style="color: var(--accent-green);">● ONLINE</span>
+            </div>
+            <div class="bubble-text" id="mascotText">
+                Hello! I am Sparky. I roam the presentation autonomously to guide your pitch!
+            </div>
+        </div>
+
+        <!-- Robot Model -->
+        <div class="robot-body" id="robotBody">
+            <div class="antenna">
+                <div class="antenna-bulb"></div>
+            </div>
+            <div class="head" id="mascotHead">
+                <div class="visor">
+                    <div class="eye" id="eyeL">
+                        <div class="pupil" id="pupilL"></div>
+                    </div>
+                    <div class="eye" id="eyeR">
+                        <div class="pupil" id="pupilR"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="thruster-left"><div class="flame"></div></div>
+            <div class="thruster-right"><div class="flame"></div></div>
+            <div class="mascot-ai-mode" id="mascotModeTag">PATROL</div>
+        </div>
+    </div>
+
+    <script>
+        // ========================== SLIDES CONTROLLER ==========================
+        const slides = document.querySelectorAll('.slide');
+        const counter = document.getElementById('counter');
+        const progressBar = document.getElementById('progressBar');
+        const dotsContainer = document.getElementById('dotsContainer');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const mascotText = document.getElementById('mascotText');
+
+        let currentIndex = 0;
+        const totalSlides = slides.length;
+        let soundEnabled = true;
+
+        // Sound Effects (Web Audio Synth)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playBeep(freq = 600, duration = 0.08, type = 'sine') {
+            if (!soundEnabled) return;
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();   // browsers start audio muted until a click/key
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e){}
+        }
+
+        document.getElementById('btnToggleSound').addEventListener('click', (e) => {
+            soundEnabled = !soundEnabled;
+            e.target.innerText = soundEnabled ? '🔊 Audio: ON' : '🔇 Audio: MUTED';
+        });
+
+        // Generate slide dots
+        slides.forEach((_, i) => {
+            const dot = document.createElement('div');
+            dot.className = `dot ${i === 0 ? 'active' : ''}`;
+            dot.addEventListener('click', () => goToSlide(i));
+            dotsContainer.appendChild(dot);
+        });
+
+        function updateSlideUI() {
+            slides.forEach((s, idx) => s.classList.toggle('active', idx === currentIndex));
+            document.querySelectorAll('.dot').forEach((d, idx) => d.classList.toggle('active', idx === currentIndex));
+            counter.innerText = `${String(currentIndex + 1).padStart(2, '0')} / ${String(totalSlides).padStart(2, '0')}`;
+            progressBar.style.width = `${((currentIndex + 1) / totalSlides) * 100}%`;
+
+            const activeSlide = slides[currentIndex];
+            mascotText.innerText = activeSlide.getAttribute('data-mascot') || "SightSeeker autonomous vision navigation system.";
+            if (typeof showBubble === 'function') showBubble();
+
+            playBeep(700, 0.09, 'sine');
+            setTimeout(() => playBeep(950, 0.12, 'sine'), 80);
+
+            // (Sparky changes corner on its own timer, so it doesn't fly across the screen on every click)
+        }
+
+        function nextSlide() { if (currentIndex < totalSlides - 1) { currentIndex++; updateSlideUI(); } }
+        function prevSlide() { if (currentIndex > 0) { currentIndex--; updateSlideUI(); } }
+        function goToSlide(idx) { currentIndex = idx; updateSlideUI(); }
+
+        nextBtn.addEventListener('click', nextSlide);
+        prevBtn.addEventListener('click', prevSlide);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); nextSlide(); }
+            else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prevSlide(); }
+        });
+
+        // ========================== 1. SLIDE 2: INTERACTIVE OBSTACLE RADAR ==========================
+        // A tiny version of the real planner: 24 range rays -> free-space check -> steer to the open
+        // direction closest to the goal. Click to drop obstacles; the rover re-plans live.
+        const obsCanvas = document.getElementById('obstacleCanvas');
+        if (obsCanvas) {
+            const ctx = obsCanvas.getContext('2d');
+            const NRAY = 24, RANGE = 75, BOT_R = 8, SAFE = 15;
+            const obstacles = [
+                { x: 0.33, y: 80, r: 16 },
+                { x: 0.53, y: 112, r: 18 },
+                { x: 0.70, y: 70, r: 16 }
+            ];
+            const bot = { x: 40, y: 95, a: 0, v: 1.8 };
+            let W = 0, H = 190, rays = new Array(NRAY).fill(RANGE), goalX = 0;
+            function resize() {
+                const w = obsCanvas.clientWidth;
+                if (!w) return;
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                obsCanvas.width = Math.round(w * dpr); obsCanvas.height = Math.round(H * dpr);
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                W = w; goalX = W - 40;
+            }
+            resize();
+            window.addEventListener('resize', resize);
+            const ox = (o) => (o.x <= 1 ? o.x * W : o.x);   // first obstacles are given as fractions of width
+
+            obsCanvas.addEventListener('click', (e) => {
+                const rect = obsCanvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+                if (Math.hypot(mx - bot.x, my - bot.y) < 30 || Math.hypot(mx - goalX, my - H / 2) < 28) return;
+                obstacles.push({ x: mx, y: my, r: 16 });
+                if (obstacles.length > 9) obstacles.shift();
+                playBeep(450, 0.08, 'triangle');
+            });
+            const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+            function renderObstacleSim() {
+                if (!W) resize();
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(0, 0, W, H);
+                ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+                for (let x = 0; x < W; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+                for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+                // SENSE: cast rays against obstacles and arena edges
+                for (let i = 0; i < NRAY; i++) {
+                    const a = i * Math.PI * 2 / NRAY, dx = Math.cos(a), dy = Math.sin(a);
+                    let best = RANGE;
+                    for (const o of obstacles) {
+                        const fx = bot.x - ox(o), fy = bot.y - o.y, b = fx * dx + fy * dy, c = fx * fx + fy * fy - o.r * o.r, disc = b * b - c;
+                        if (disc >= 0) { let t = -b - Math.sqrt(disc); if (t < 0 && c < 0) t = 0; if (t >= 0 && t < best) best = t; }
+                    }
+                    if (dx > 1e-6) best = Math.min(best, (W - bot.x) / dx); else if (dx < -1e-6) best = Math.min(best, -bot.x / dx);
+                    if (dy > 1e-6) best = Math.min(best, (H - bot.y) / dy); else if (dy < -1e-6) best = Math.min(best, -bot.y / dy);
+                    rays[i] = best;
+                }
+                // THINK: free distance per direction, pick the open one closest to the goal
+                const goalA = Math.atan2(H / 2 - bot.y, goalX - bot.x);
+                let bestA = goalA, bestCost = Infinity, blockedAhead = false;
+                for (let k = 0; k < NRAY; k++) {
+                    const a = k * Math.PI * 2 / NRAY;
+                    let free = RANGE;
+                    for (let j = 0; j < NRAY; j++) {
+                        if (rays[j] >= RANGE) continue;
+                        const da = (j - k) * Math.PI * 2 / NRAY, proj = rays[j] * Math.cos(da), perp = rays[j] * Math.sin(da);
+                        if (proj > 0 && perp * perp < SAFE * SAFE) free = Math.min(free, proj - Math.sqrt(SAFE * SAFE - perp * perp));
+                    }
+                    if (free < 4) continue;
+                    const cost = Math.abs(wrap(a - goalA)) + 0.3 * Math.abs(wrap(a - bot.a)) + 2 * Math.max(0, 1 - free / 60);
+                    if (cost < bestCost) { bestCost = cost; bestA = a; }
+                }
+                blockedAhead = Math.abs(wrap(bestA - goalA)) > 0.35;
+                // ACT: turn toward the chosen direction, move
+                bot.a += Math.max(-0.12, Math.min(0.12, wrap(bestA - bot.a)));
+                const speed = bot.v * Math.max(0.3, Math.cos(wrap(bestA - bot.a)));
+                bot.x += Math.cos(bot.a) * speed; bot.y += Math.sin(bot.a) * speed;
+                bot.x = Math.max(BOT_R, Math.min(W - BOT_R, bot.x)); bot.y = Math.max(BOT_R, Math.min(H - BOT_R, bot.y));
+                if (Math.hypot(goalX - bot.x, H / 2 - bot.y) < 18) { bot.x = 40; bot.y = 95; bot.a = 0; }
+
+                // DRAW
+                for (let i = 0; i < NRAY; i++) {
+                    const a = i * Math.PI * 2 / NRAY, near = rays[i] < 35;
+                    ctx.strokeStyle = near ? 'rgba(248,113,113,0.85)' : 'rgba(56,189,248,0.25)';
+                    ctx.beginPath(); ctx.moveTo(bot.x, bot.y); ctx.lineTo(bot.x + Math.cos(a) * rays[i], bot.y + Math.sin(a) * rays[i]); ctx.stroke();
+                }
+                ctx.fillStyle = '#10b981';
+                ctx.beginPath(); ctx.arc(goalX, H / 2, 12, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#ffffff'; ctx.font = '9px Consolas'; ctx.fillText('GOAL', goalX - 11, H / 2 + 3);
+                obstacles.forEach(o => {
+                    ctx.fillStyle = '#ef4444';
+                    ctx.beginPath(); ctx.arc(ox(o), o.y, o.r, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = '#f87171'; ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1;
+                });
+                ctx.strokeStyle = blockedAhead ? '#f59e0b' : '#10b981'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(bot.x, bot.y); ctx.lineTo(bot.x + Math.cos(bestA) * 26, bot.y + Math.sin(bestA) * 26); ctx.stroke(); ctx.lineWidth = 1;
+                ctx.fillStyle = '#008eb8';
+                ctx.beginPath(); ctx.arc(bot.x, bot.y, BOT_R, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1;
+                const st = document.getElementById('radarStatus');
+                if (st) { st.textContent = blockedAhead ? '● AVOIDING' : '● HEADING TO GOAL'; st.style.color = blockedAhead ? '#f59e0b' : '#10b981'; }
+                requestAnimationFrame(renderObstacleSim);
+            }
+            renderObstacleSim();
+        }
+
+        // ========================== 2. SLIDE 4: PIPELINE INSPECTOR ==========================
+        const pipelineData = [
+            { title: "Stage 1: Sensing", desc: "Webcam frames via OpenCV on the real pipeline; in simulation, a robot camera plus a 72-ray 360° LiDAR.", badges: ["OpenCV", "Webcam / sim camera", "72-ray LiDAR (sim)"] },
+            { title: "Stage 2: Perception & Language Grounding", desc: "YOLO26 puts boxes, classes and confidences on every frame. The text goal ('find my phone') is grounded to a detector class.", badges: ["YOLO26l · 55.0 mAP (GPU)", "80 COCO classes", "Synonyms + typos"] },
+            { title: "Stage 3: Decision Engine (FSM + Memory)", desc: "SEARCHING (360° scan, then smart frontier search: likely spots first, e.g. near steel barrels when looking for the red barrel) ➔ NAVIGATING (target seen or remembered) ➔ AVOIDING (path blocked) ➔ GOAL_REACHED. Everything it sees goes into a semantic map.", badges: ["Finite State Machine", "Semantic map", "Decision log"] },
+            { title: "Stage 4: Free-Space Planning + Safety", desc: "From the LiDAR scan the planner computes how far the robot can drive in 72 directions and picks the open one closest to the goal (VFH, the Vector Field Histogram method). A safety layer caps speed so it can always stop in time.", badges: ["VFH planner", "Safety stop", "0 collisions / 1,000 runs"] },
+            { title: "Stage 5: Motor Commands", desc: "Proportional steering turns the decision into left/right wheel speeds (−255…255); the Vision Brain can stream them over USB to an Arduino + L298N rover.", badges: ["P-control", "PWM −255…255", "Arduino bridge"] }
+        ];
+
+        function selectPipeline(idx) {
+            document.querySelectorAll('.p-step').forEach((el, i) => el.classList.toggle('selected', i === idx));
+            const data = pipelineData[idx];
+            document.getElementById('pTitle').innerText = data.title;
+            document.getElementById('pDesc').innerText = data.desc;
+            document.getElementById('pBadges').innerHTML = data.badges.map(b => `<span class="p-badge">${b}</span>`).join('');
+            playBeep(520 + idx * 80, 0.08, 'sine');
+        }
+
+        // ========================== 3. SLIDE 5: ROI CALCULATOR ==========================
+        function updateCalculator(val) {
+            const count = parseInt(val);
+            document.getElementById('sliderFleetVal').innerText = `${count} Units`;
+            const annualSavings = count * 28800;
+            const hoursSaved = count * 1440;
+            document.getElementById('calcSavings').innerText = `$${annualSavings.toLocaleString()}`;
+            document.getElementById('calcHours').innerText = `${hoursSaved.toLocaleString()} hrs`;
+        }
+
+        // ========================== 4. SLIDE 6: THEME SWITCHER ==========================
+        const modeContents = {
+            gaming: `
+                <h4 style="font-size: 16px; font-weight: 800; color: #0f172a; margin-bottom: 6px;">🎮 Autonomous NPC Intelligence in 3D Engines</h4>
+                <p style="font-size: 13px; color: #475569; line-height: 1.6; margin-bottom: 12px;">Modern open-world games suffer from robotic, pre-calculated NavMesh paths that break when the game environment collapses or alters.</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div style="background: white; padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+                        <strong>Already working:</strong> the robot in our Three.js 3D world is effectively an NPC that sees, maps and plans for itself — no pre-baked navigation mesh.
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+                        <strong>Next step:</strong> package the perception → planner loop as a plug-in so Unity / Unreal NPCs can use it.
+                    </div>
+                </div>
+            `,
+            web3: `
+                <h4 style="font-size: 16px; font-weight: 800; color: #0f172a; margin-bottom: 6px;">⛓️ Web3 DePIN (Decentralized Physical Infrastructure Networks)</h4>
+                <p style="font-size: 13px; color: #475569; line-height: 1.6; margin-bottom: 12px;">Future direction: robot fleets that prove the work they did (areas explored, deliveries made) so it can be rewarded on-chain.</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div style="background: white; padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+                        <strong>Signed mission logs:</strong> the decision log and map the robot already produces could be signed and anchored on-chain as proof of work.
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+                        <strong>Smart-contract payouts:</strong> a verified "goal reached" event could release payment for a delivery automatically.
+                    </div>
+                </div>
+            `,
+            hardware: `
+                <h4 style="font-size: 16px; font-weight: 800; color: #0f172a; margin-bottom: 6px;">🤖 Sim-to-Real Hardware Bridge</h4>
+                <p style="font-size: 13px; color: #475569; line-height: 1.6; margin-bottom: 12px;">Modular Sense → Think → Act design, so the same decision logic can drive real motors.</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div style="background: white; padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+                        <strong>Included today:</strong> Arduino firmware that takes left/right wheel commands from the Vision Brain over USB (L298N driver). Target stack: Raspberry Pi 5 / Jetson Orin Nano + camera.
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+                        <strong>Same vision engine:</strong> the same YOLO26n weights run on a Pi or Jetson for the 80 COCO classes; custom objects would need fine-tuning.
+                    </div>
+                </div>
+            `
+        };
+
+        function switchThemeMode(mode) {
+            document.querySelectorAll('.mode-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.getAttribute('onclick').includes(mode));
+            });
+            document.getElementById('modeContent').innerHTML = modeContents[mode];
+            playBeep(640, 0.08, 'sine');
+        }
+        switchThemeMode('gaming');
+
+        // ========================== 5. SPARKY MASCOT ==========================
+        // Modes: ROAM (moves between safe corners), DOCKED (bottom-right), HIDDEN. Press M to cycle.
+        // The speech bubble shows for a few seconds after each slide change, then fades so it never
+        // covers slide content; it never blocks clicks.
+        const mascotEntity = document.getElementById('mascotEntity');
+        const pupilL = document.getElementById('pupilL');
+        const pupilR = document.getElementById('pupilR');
+        const eyeL = document.getElementById('eyeL');
+        const eyeR = document.getElementById('eyeR');
+        const mascotHead = document.getElementById('mascotHead');
+        const robotBody = document.getElementById('robotBody');
+        const mascotModeTag = document.getElementById('mascotModeTag');
+        const speechBubble = document.getElementById('speechBubble');
+        const btnMascot = document.getElementById('btnMascotFollow');
+
+        const MODES = ['ROAM', 'DOCKED', 'HIDDEN'];
+        let mascotMode = 0, roamIdx = 1;
+        let curX = window.innerWidth - 104, curY = window.innerHeight - 126;
+        let targetX = curX, targetY = curY;
+        let isDragging = false, dragMoved = false, blinking = false;
+        let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2;
+        let bubbleTimer = null;
+
+        function showBubble(ms = 6500) {
+            speechBubble.classList.remove('hidden');
+            clearTimeout(bubbleTimer);
+            bubbleTimer = setTimeout(() => speechBubble.classList.add('hidden'), ms);
+        }
+        // Safe spots: the corners beside the bottom navigation bar (never the header or slide centre)
+        function safeSpots() {
+            const w = window.innerWidth, h = window.innerHeight;
+            return [
+                { x: w - 104, y: h - 126, tag: 'PATROL', side: 'left' },
+                { x: 4, y: h - 126, tag: 'OBSERVE', side: 'right' },
+            ];
+        }
+        function pickNewMascotTarget() {
+            if (isDragging) return;
+            const spots = safeSpots();
+            if (MODES[mascotMode] === 'DOCKED') {
+                targetX = spots[0].x; targetY = spots[0].y; mascotModeTag.innerText = 'DOCKED';
+                mascotEntity.classList.remove('bubble-right'); return;
+            }
+            if (MODES[mascotMode] !== 'ROAM') return;
+            roamIdx = (roamIdx + 1) % spots.length;
+            const chosen = spots[roamIdx];
+            targetX = chosen.x; targetY = chosen.y;
+            mascotModeTag.innerText = chosen.tag;
+            mascotEntity.classList.toggle('bubble-right', chosen.side === 'right');
+        }
+        function setMascotMode(i) {
+            mascotMode = i;
+            const m = MODES[mascotMode];
+            btnMascot.innerText = `🤖 Sparky: ${m}`;
+            mascotEntity.classList.toggle('off', m === 'HIDDEN');
+            pickNewMascotTarget();
+        }
+        btnMascot.addEventListener('click', () => setMascotMode((mascotMode + 1) % MODES.length));
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'm' || e.key === 'M') setMascotMode((mascotMode + 1) % MODES.length);
+            if (e.key === 'f' || e.key === 'F') {
+                if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+                else document.exitFullscreen();
+            }
+        });
+        setInterval(pickNewMascotTarget, 12000);
+        window.addEventListener('resize', pickNewMascotTarget);
+
+        function lookAt(x, y) {
+            if (blinking) return;
+            [{ eye: eyeL, pupil: pupilL }, { eye: eyeR, pupil: pupilR }].forEach(({ eye, pupil }) => {
+                const rect = eye.getBoundingClientRect();
+                const dx = x - (rect.left + rect.width / 2), dy = y - (rect.top + rect.height / 2);
+                const angle = Math.atan2(dy, dx), dist = Math.min(5.5, Math.hypot(dx, dy) / 12);
+                pupil.style.transform = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`;
+            });
+            const headRect = mascotHead.getBoundingClientRect();
+            const tilt = ((x - (headRect.left + headRect.width / 2)) / window.innerWidth) * 14;
+            mascotHead.style.transform = `translateX(-50%) rotate(${tilt}deg)`;
+        }
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX; mouseY = e.clientY;
+            if (isDragging) { targetX = mouseX - 50; targetY = mouseY - 90; dragMoved = true; }
+            lookAt(mouseX, mouseY);
+        });
+
+        robotBody.addEventListener('mousedown', (e) => {
+            isDragging = true; dragMoved = false;
+            mascotModeTag.innerText = 'MANUAL';
+            e.preventDefault();
+        });
+        document.addEventListener('mouseup', () => {
+            if (isDragging && dragMoved && MODES[mascotMode] === 'ROAM') setMascotMode(1);  // stay where dropped-ish
+            isDragging = false;
+        });
+        robotBody.addEventListener('click', () => {
+            if (dragMoved) return;
+            playBeep(1100, 0.08, 'sine');
+            setTimeout(() => playBeep(1400, 0.1, 'sine'), 90);
+            const quips = [
+                "BEEP BOOP! Vision pipeline online.",
+                "Press M to dock or hide me, F for fullscreen.",
+                "Ask the judges to drop obstacles on slide 2!",
+                "My eyes are locked onto your cursor! 👀",
+                "Fun fact: the 3D robot has a built-in 50-trial benchmark."
+            ];
+            mascotText.innerText = quips[Math.floor(Math.random() * quips.length)];
+            showBubble(4500);
+        });
+
+        function mascotLoop() {
+            const speed = isDragging ? 0.25 : 0.045;
+            curX += (targetX - curX) * speed;
+            curY += (targetY - curY) * speed;
+            const hoverY = Math.sin(Date.now() * 0.0035) * 6;
+            mascotEntity.style.transform = `translate(${curX}px, ${curY + hoverY}px)`;
+            requestAnimationFrame(mascotLoop);
+        }
+        mascotLoop();
+
+        // Eye blink (keeps the eye-tracking position afterwards)
+        setInterval(() => {
+            blinking = true;
+            pupilL.style.transform += ' scaleY(0.1)';
+            pupilR.style.transform += ' scaleY(0.1)';
+            setTimeout(() => { blinking = false; lookAt(mouseX, mouseY); }, 160);
+        }, 4000);
+        updateSlideUI();
+    </script>
+</body>
+</html>
