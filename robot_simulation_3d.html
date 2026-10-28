@@ -1,0 +1,2101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SightSeeker 3D — Autonomous Vision Robot Simulation</title>
+    <!-- Local, offline Three.js (r128) — keep these two files next to this HTML file -->
+    <script src="three.min.js"></script>
+    <script src="OrbitControls.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            user-select: none;
+        }
+        input { user-select: text; }
+        body {
+            background-color: #f0f2f6;
+            color: #1e2028;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        .mono { font-family: 'Consolas', 'Cascadia Mono', monospace; }
+
+        /* ---------- Top bar ---------- */
+        .top-bar {
+            position: absolute; top: 16px; left: 20px;
+            display: flex; align-items: center; gap: 14px;
+            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px);
+            padding: 10px 18px; border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.09);
+            border: 1px solid rgba(0, 145, 190, 0.25); z-index: 10;
+            max-width: calc(100vw - 440px);
+        }
+        .brand { display: flex; flex-direction: column; }
+        .brand h1 { font-size: 21px; font-weight: 800; color: #008eb8; letter-spacing: -0.5px; white-space: nowrap; }
+        .brand span { font-size: 10.5px; color: #7b8294; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
+        .badge-status {
+            padding: 7px 14px; border-radius: 20px; font-size: 12.5px; font-weight: 800; letter-spacing: 0.5px;
+            display: flex; align-items: center; gap: 8px; transition: all 0.3s ease; white-space: nowrap;
+        }
+        .badge-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .status-searching { background: #fff8e1; color: #b78103; border: 1px solid #ffd54f; }
+        .status-searching .badge-dot { background: #fbc02d; animation: pulse 1s infinite; }
+        .status-navigating { background: #e8f5e9; color: #1b5e20; border: 1px solid #81c784; }
+        .status-navigating .badge-dot { background: #43a047; }
+        .status-avoiding { background: #ffebee; color: #b71c1c; border: 1px solid #ef9a9a; }
+        .status-avoiding .badge-dot { background: #e53935; animation: pulse 0.5s infinite; }
+        .status-goal { background: #e0f7fa; color: #006064; border: 1px solid #4dd0e1; }
+        .status-goal .badge-dot { background: #00acc1; }
+        .status-idle { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+        .status-idle .badge-dot { background: #94a3b8; }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.3); } }
+        .mission-chip { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+        .mission-chip .main { font-size: 13px; font-weight: 800; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mission-chip .sub { font-size: 11px; font-weight: 600; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* ---------- Reasoning log (left) ---------- */
+        .log-panel {
+            position: absolute; top: 92px; left: 20px; width: 380px;
+            display: flex; flex-direction: column; gap: 5px; z-index: 9; pointer-events: none;
+        }
+        .log-title { font-size: 10.5px; font-weight: 800; color: #64748b; letter-spacing: 0.6px; text-transform: uppercase; margin: 0 0 1px 4px; }
+        .log-line {
+            background: rgba(255, 255, 255, 0.92); border-left: 3px solid #008eb8;
+            padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #1e293b;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06); animation: logIn 0.3s ease;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .log-line .t { font-family: 'Consolas', monospace; color: #64748b; margin-right: 6px; font-size: 11px; }
+        .log-line.goal { border-left-color: #10b981; }
+        .log-line.warn { border-left-color: #e53935; }
+        .log-line.map { border-left-color: #8b5cf6; }
+        .log-line.plan { border-left-color: #f59e0b; }
+        @keyframes logIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+
+        /* ---------- Right HUD ---------- */
+        .hud-panel {
+            position: absolute; top: 16px; right: 20px; width: 380px;
+            display: flex; flex-direction: column; gap: 12px; z-index: 10;
+            max-height: calc(100vh - 110px); overflow-y: auto; scrollbar-width: thin;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px);
+            border-radius: 16px; padding: 14px;
+            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.09); border: 1px solid rgba(210, 215, 225, 0.8);
+        }
+        .pov-card { padding: 12px; position: relative; overflow: hidden; }
+        .pov-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+            font-size: 12.5px; font-weight: 800; color: #008eb8; text-transform: uppercase; letter-spacing: 0.6px;
+        }
+        .pov-indicator { display: flex; align-items: center; gap: 6px; color: #e53935; font-size: 10.5px; font-weight: 800; }
+        .pov-indicator::before { content: ''; width: 7px; height: 7px; background: #e53935; border-radius: 50%; animation: pulse 1s infinite; }
+        .icon-btn {
+            background: rgba(0, 0, 0, 0.06); border: none; border-radius: 4px; font-size: 13px; font-weight: bold;
+            cursor: pointer; color: #64748b; padding: 2px 7px; line-height: 1; transition: background 0.2s;
+        }
+        .icon-btn:hover { background: rgba(0, 0, 0, 0.12); }
+        .pov-canvas-container {
+            width: 100%; height: 215px; border-radius: 10px; overflow: hidden; position: relative;
+            background: #101520; border: 1px solid #cbd5e1;
+        }
+        #pov-canvas, #pov-boxes { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .pov-overlay {
+            position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column;
+            justify-content: flex-end; padding: 6px 8px; font-family: 'Consolas', monospace; font-size: 10px;
+            color: #00ffcc; text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 255, 204, 0.4);
+        }
+        .pov-overlay .crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 22px; height: 22px; border: 1px dashed rgba(0, 255, 204, 0.6); border-radius: 50%;
+        }
+        #pov-detection-tag { font-weight: 700; }
+        .pov-bottom { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+        .pov-bottom > div { background: rgba(2, 6, 23, 0.62); padding: 2px 6px; border-radius: 4px; }
+
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .stat-item { background: #f8fafc; padding: 7px 9px; border-radius: 8px; border: 1px solid #e2e8f0; min-width: 0; }
+        .stat-label { font-size: 9.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+        .stat-value { font-size: 13px; font-weight: 700; color: #0f172a; font-family: 'Consolas', monospace; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stat-value.good { color: #059669; }
+        .stat-value.bad { color: #dc2626; }
+
+        .map-card { display: flex; gap: 12px; }
+        .map-col { flex: 0 0 140px; }
+        .det-col { flex: 1; min-width: 0; }
+        #minimap { width: 140px; height: 140px; border-radius: 8px; border: 1px solid #cbd5e1; display: block; background: #dfe5ee; }
+        .map-legend { font-size: 9.5px; color: #64748b; margin-top: 5px; line-height: 1.4; font-weight: 600; }
+        .map-legend b { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
+        .detections-title { font-size: 11.5px; font-weight: 800; color: #334155; margin-bottom: 7px; display: flex; justify-content: space-between; gap: 6px; }
+        .detections-list { display: flex; flex-direction: column; gap: 5px; max-height: 160px; overflow-y: auto; }
+        .detection-item {
+            display: flex; justify-content: space-between; align-items: center; gap: 4px;
+            background: #f8fafc; padding: 5px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
+            border-left: 3px solid #008eb8;
+        }
+        .detection-item span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .detection-item.target { background: #ecfdf5; border-left-color: #10b981; color: #047857; }
+        .detection-item.empty { color: #94a3b8; justify-content: center; border-left-color: #cbd5e1; }
+        .confidence-badge { font-size: 10px; font-family: 'Consolas', monospace; background: #e2e8f0; padding: 1px 5px; border-radius: 4px; color: #334155; flex-shrink: 0; }
+
+        /* ---------- Bottom controls ---------- */
+        .bottom-bar {
+            position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;
+            background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(14px);
+            padding: 9px 16px; border-radius: 28px; box-shadow: 0 10px 35px rgba(0, 0, 0, 0.12);
+            border: 1px solid rgba(210, 215, 225, 0.8); z-index: 10;
+            max-width: calc(100vw - 24px); width: max-content;
+        }
+        .btn {
+            background: #f1f5f9; color: #1e293b; border: 1px solid #cbd5e1; padding: 8px 14px; border-radius: 22px;
+            font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px;
+            transition: all 0.2s; white-space: nowrap;
+        }
+        .btn:hover { background: #e2e8f0; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); }
+        .btn-primary { background: #008eb8; color: white; border-color: #007a9e; }
+        .btn-primary:hover { background: #007a9e; }
+        .select-goal {
+            padding: 8px 14px; border-radius: 22px; border: 1px solid #cbd5e1; background: white;
+            font-size: 12.5px; font-weight: 700; color: #0f172a; outline: none; cursor: pointer;
+        }
+        #nl-goal-input { width: 250px; font-weight: 500; cursor: text; }
+        #nl-goal-input:focus { border-color: #008eb8; box-shadow: 0 0 0 3px rgba(0, 142, 184, 0.15); }
+        .sep { width: 1px; height: 26px; background: #e2e8f0; }
+
+        /* ---------- Toast ---------- */
+        .toast {
+            position: absolute; top: 84px; left: 50%; transform: translateX(-50%);
+            background: #008eb8; color: white; padding: 9px 20px; border-radius: 30px; font-size: 13px; font-weight: 700;
+            box-shadow: 0 6px 20px rgba(0, 142, 184, 0.35); z-index: 30; opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s ease; max-width: min(720px, calc(100vw - 40px));
+            text-align: center;
+        }
+        .toast.show { opacity: 1; transform: translate(-50%, 6px); }
+        .toast.warn { background: #b45309; box-shadow: 0 6px 20px rgba(180, 83, 9, 0.35); }
+        .toast.goal { background: #059669; box-shadow: 0 6px 20px rgba(5, 150, 105, 0.35); }
+
+        /* ---------- Demo-mode captions ---------- */
+        .caption {
+            position: absolute; bottom: 130px; left: 50%; transform: translate(-50%, 8px);
+            background: rgba(15, 23, 42, 0.88); color: #fff; padding: 12px 26px; border-radius: 14px;
+            font-size: 20px; font-weight: 800; letter-spacing: 0.2px; z-index: 60; opacity: 0; pointer-events: none;
+            transition: opacity 0.35s ease, transform 0.35s ease; max-width: min(860px, calc(100vw - 40px)); text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        }
+        .caption.show { opacity: 1; transform: translate(-50%, 0); }
+        .caption small { display: block; font-size: 13px; font-weight: 600; color: #cbd5e1; margin-top: 3px; }
+        .compare { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: #ecfdf5; border: 1px solid #a7f3d0;
+            font-size: 12.5px; color: #065f46; font-weight: 700; line-height: 1.5; }
+
+        .hint-text {
+            position: absolute; bottom: 82px; left: 20px; font-size: 11px; color: #64748b;
+            background: rgba(255, 255, 255, 0.85); padding: 6px 10px; border-radius: 8px; pointer-events: none;
+            backdrop-filter: blur(8px); line-height: 1.5; max-width: 330px;
+        }
+        .hint-text kbd {
+            font-family: 'Consolas', monospace; font-size: 10px; background: #f1f5f9; border: 1px solid #cbd5e1;
+            border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: #334155;
+        }
+
+        /* ---------- Benchmark modal ---------- */
+        .modal-backdrop {
+            position: absolute; inset: 0; background: rgba(15, 23, 42, 0.35); backdrop-filter: blur(3px);
+            display: none; align-items: center; justify-content: center; z-index: 50;
+        }
+        .modal-backdrop.open { display: flex; }
+        .modal {
+            width: min(560px, calc(100vw - 32px)); background: white; border-radius: 18px; padding: 22px 24px;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.25); max-height: calc(100vh - 40px); overflow-y: auto;
+        }
+        .modal h2 { font-size: 19px; font-weight: 800; color: #0f172a; }
+        .modal p.desc { font-size: 12.5px; color: #64748b; margin: 6px 0 14px; line-height: 1.5; }
+        .progress { height: 8px; background: #e2e8f0; border-radius: 6px; overflow: hidden; }
+        .progress > div { height: 100%; width: 0; background: linear-gradient(90deg, #008eb8, #38bdf8); transition: width 0.2s; }
+        .bench-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+        .bench-cell { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; text-align: center; }
+        .bench-cell .v { font-size: 20px; font-weight: 900; font-family: 'Consolas', monospace; color: #0f172a; }
+        .bench-cell .l { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+        .bench-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 12px; }
+        .bench-table th, .bench-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+        .bench-table th { color: #64748b; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+        .lib-error {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 40px;
+            font-size: 16px; font-weight: 700; color: #b91c1c; text-align: center; background: #fff;
+        }
+
+        /* ---------- Responsive: laptops & projectors ---------- */
+        @media (max-width: 1500px) {
+            .hud-panel { width: 340px; }
+            .top-bar { max-width: calc(100vw - 400px); }
+            .log-panel { width: 340px; }
+            .map-col { flex-basis: 124px; }
+            #minimap { width: 124px; height: 124px; }
+            #nl-goal-input { width: 200px; }
+            .btn { padding: 7px 11px; font-size: 12px; }
+            .select-goal { padding: 7px 10px; font-size: 12px; }
+        }
+        @media (max-height: 820px) {
+            .pov-canvas-container { height: 165px; }
+            .detections-list { max-height: 118px; }
+            .card { padding: 11px; }
+            .log-panel { top: 84px; }
+        }
+        @media (max-width: 1200px) {
+            .log-panel { display: none; }
+            .hint-text { display: none; }
+            .brand span { display: none; }
+            .sep { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- Top-left: brand, AI state, mission -->
+    <div class="top-bar">
+        <div class="brand">
+            <h1>🤖 SightSeeker 3D</h1>
+            <span>Autonomous Vision Navigation</span>
+        </div>
+        <div id="status-badge" class="badge-status status-searching">
+            <span class="badge-dot"></span>
+            <span id="status-text">SEARCHING</span>
+        </div>
+        <div class="mission-chip">
+            <span class="main" id="goal-chip">🎯 Goal: Red Barrel</span>
+            <span class="sub" id="sub-text">360° scan</span>
+        </div>
+        <div class="mission-chip mono">
+            <span class="main" id="timer-chip">⏱ 0.0 s</span>
+            <span class="sub" id="speed-chip">sim ×3</span>
+        </div>
+    </div>
+
+    <!-- Left: live decision log (why the robot is doing what it does) -->
+    <div class="log-panel" id="log-panel"></div>
+
+    <!-- Right: perception + telemetry -->
+    <div class="hud-panel" id="hud-panel">
+        <div class="card pov-card" id="pov-card">
+            <div class="pov-header">
+                <span>📷 Robot Camera</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="pov-indicator">LIVE · SIM DETECTOR</span>
+                    <button class="icon-btn" id="btn-close-pov" title="Hide camera window (V)">✕</button>
+                </div>
+            </div>
+            <div class="pov-canvas-container" id="pov-container">
+                <canvas id="pov-canvas"></canvas>
+                <canvas id="pov-boxes"></canvas>
+                <div class="pov-overlay">
+                    <div class="crosshair"></div>
+                    <div class="pov-bottom">
+                        <div>HFOV 70° · <span id="pov-fps">60</span> FPS · YOLO-format boxes</div>
+                        <div id="pov-detection-tag">SCANNING ENVIRONMENT…</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="stat-grid">
+                <div class="stat-item"><div class="stat-label">Position X, Z</div><div class="stat-value" id="val-pos">0.0, 0.0</div></div>
+                <div class="stat-item"><div class="stat-label">Heading</div><div class="stat-value" id="val-heading">0°</div></div>
+                <div class="stat-item"><div class="stat-label">Speed</div><div class="stat-value" id="val-speed">0.0 m/s</div></div>
+                <div class="stat-item"><div class="stat-label">Target belief</div><div class="stat-value" id="val-dist">not seen</div></div>
+                <div class="stat-item"><div class="stat-label">Explored</div><div class="stat-value" id="val-explored">0%</div></div>
+                <div class="stat-item"><div class="stat-label">Collisions</div><div class="stat-value good" id="val-coll">0</div></div>
+            </div>
+        </div>
+
+        <div class="card map-card">
+            <div class="map-col">
+                <div class="detections-title"><span>🗺️ Robot's map</span></div>
+                <canvas id="minimap"></canvas>
+                <div class="map-legend">
+                    <b style="background:#ffffff;border:1px solid #cbd5e1"></b>seen
+                    <b style="background:#dfe5ee;border:1px solid #cbd5e1"></b>unknown
+                    <b style="background:#334155"></b>LiDAR hit
+                </div>
+            </div>
+            <div class="det-col">
+                <div class="detections-title">
+                    <span>👁️ Detections</span>
+                    <span id="val-det-count" style="color: #008eb8;">0 visible</span>
+                </div>
+                <div class="detections-list" id="detections-list">
+                    <div class="detection-item empty">Scanning…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom: mission controls -->
+    <div class="bottom-bar">
+        <input type="text" id="nl-goal-input" class="select-goal" placeholder="🗣️ Prompt: 'Find the red barrel'…" autocomplete="off">
+        <button class="btn btn-primary" id="btn-nl-submit">Send</button>
+        <select id="goal-select" class="select-goal" title="Pick a target object"></select>
+        <span class="sep"></span>
+        <button class="btn btn-primary" id="btn-reset" title="New random warehouse + reset robot (R)">🔄 Re-arm</button>
+        <button class="btn" id="btn-cam" title="Cycle camera (C)">🎥 Cam: Orbit</button>
+        <button class="btn" id="btn-toggle-pov" title="Show/hide robot camera (V)">📷 POV: ON</button>
+        <button class="btn" id="btn-pause" title="Pause/resume (Space)">⏸️ Pause</button>
+        <button class="btn" id="btn-speed" title="Simulation speed (F)">⏩ ×3</button>
+        <button class="btn" id="btn-bench" title="Run randomized trials (B)">📊 Trials</button>
+    </div>
+
+    <div class="hint-text" id="hint-text">
+        🖱️ Drag: rotate · Right-drag: pan · Scroll: zoom<br>
+        <kbd>Space</kbd> pause · <kbd>C</kbd> camera · <kbd>V</kbd> POV · <kbd>R</kbd> re-arm · <kbd>F</kbd> speed · <kbd>B</kbd> trials<br>
+        <kbd>K</kbd> smart search on/off · <kbd>D</kbd> guided demo (for recording)
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <div class="caption" id="caption"></div>
+
+    <!-- Benchmark modal -->
+    <div class="modal-backdrop" id="bench-modal">
+        <div class="modal">
+            <h2>📊 Autonomy benchmark</h2>
+            <p class="desc">Runs complete missions headless — a new random warehouse and a random target every trial — using exactly the same perception, mapping and planning code as the live robot. Each warehouse is run twice, with smart search (look near the target's usual neighbours first) and with plain frontier search, for a fair comparison. Times are simulated robot-seconds.</p>
+            <div class="progress"><div id="bench-bar"></div></div>
+            <div id="bench-status" style="font-size: 12px; color: #475569; margin-top: 8px; font-weight: 600;">Ready.</div>
+            <div id="bench-results"></div>
+            <div class="modal-actions">
+                <button class="btn" id="bench-close">Close</button>
+                <button class="btn btn-primary" id="bench-run">▶ Run 50 trials</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    if (typeof THREE === 'undefined' || !THREE.OrbitControls) {
+        document.body.innerHTML = '<div class="lib-error">⚠️ three.min.js and OrbitControls.js were not found.<br>Keep both files in the same folder as robot_simulation_3d.html.</div>';
+        throw new Error('Three.js libraries missing');
+    }
+
+    // =====================================================================
+    //  MATH HELPERS  (heading convention: angle 0 faces -Z, forward = (-sin a, -cos a))
+    // =====================================================================
+    const TAU = Math.PI * 2;
+    const DEG = Math.PI / 180;
+    function wrapAngle(a) { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; }
+    function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    function bearingTo(x, z, tx, tz) { return Math.atan2(-(tx - x), -(tz - z)); }
+    function mulberry32(seed) {
+        let a = seed >>> 0;
+        return function () {
+            a = (a + 0x6D2B79F5) >>> 0;
+            let t = a;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    // =====================================================================
+    //  WORLD CONSTANTS
+    // =====================================================================
+    const ARENA_SIZE = 120;                 // metres
+    const HALF = ARENA_SIZE / 2;
+    const WALL_IN = HALF - 0.4;             // inner face of the perimeter wall
+    const NR = 72;                          // LiDAR rays (5° resolution, 360°)
+    const RAY_STEP = TAU / NR;
+    const RAY_ANG = new Float32Array(NR), RAY_DX = new Float32Array(NR), RAY_DZ = new Float32Array(NR);
+    for (let j = 0; j < NR; j++) {
+        const a = -Math.PI + j * RAY_STEP;
+        RAY_ANG[j] = a; RAY_DX[j] = -Math.sin(a); RAY_DZ[j] = -Math.cos(a);
+    }
+    const COS_D = new Float32Array(NR), SIN_D = new Float32Array(NR);
+    for (let k = 0; k < NR; k++) { COS_D[k] = Math.cos(k * RAY_STEP); SIN_D[k] = Math.sin(k * RAY_STEP); }
+    function rayIndex(angle) {
+        let j = Math.round((wrapAngle(angle) + Math.PI) / RAY_STEP) % NR;
+        return j < 0 ? j + NR : j;
+    }
+    const GC = 4, GN = ARENA_SIZE / GC;     // exploration coverage grid: 30 x 30 cells of 4 m
+    const OC = 2, ON = ARENA_SIZE / OC;     // LiDAR occupancy grid: 60 x 60 cells of 2 m
+
+    // Objects the robot can be asked to find. "unique" = exactly one in every warehouse.
+    const CATALOG = {
+        'Red Barrel':       { kind: 'barrel', color: 0xe53935, r: 1.7,  unique: true,  label: 'red barrel',   emoji: '🛢️', nouns: ['barrel', 'drum', 'keg', 'oil'], weak: [], attrs: ['red'] },
+        'Blue Crate':       { kind: 'crate',  color: 0x1e88e5, r: 2.55, unique: true,  label: 'blue crate',   emoji: '📦', nouns: ['crate', 'container'], weak: ['box'], attrs: ['blue'] },
+        'Industrial Table': { kind: 'table',  color: 0xd97706, r: 3.25, unique: true,  label: 'table',        emoji: '🪵', nouns: ['table', 'workbench', 'bench'], weak: [], attrs: ['orange', 'wooden', 'wood', 'industrial'] },
+        'Equipment Desk':   { kind: 'desk',   color: 0x7c3aed, r: 3.25, unique: true,  label: 'desk',         emoji: '🖥️', nouns: ['desk', 'workstation', 'computer', 'monitor'], weak: [], attrs: ['purple', 'violet', 'equipment'] },
+        'Steel Barrel':     { kind: 'barrel', color: 0x64748b, r: 1.7,  unique: false, label: 'steel barrel', emoji: '⚙️', nouns: ['barrel', 'drum', 'keg'], weak: [], attrs: ['steel', 'grey', 'gray', 'silver', 'metal', 'metallic'] },
+        'Cargo Box':        { kind: 'box',    color: 0xb7885a, r: 2.55, unique: false, label: 'cargo box',    emoji: '📦', nouns: ['box', 'carton', 'cardboard', 'package', 'parcel', 'cargo'], weak: [], attrs: ['brown'] },
+        'Safety Pillar':    { kind: 'pillar', color: 0xfacc15, r: 2.0,  unique: false, label: 'pillar',       emoji: '🛡️', nouns: ['pillar', 'column', 'pole', 'post'], weak: [], attrs: ['yellow', 'safety'] },
+    };
+    // Where things usually are: each target's typical neighbours in a warehouse. The world generator
+    // follows these habits (like a real warehouse), and the robot can use them to search smarter -
+    // the same idea as VLFM (ICRA 2024): explore the frontier where the target is most likely, first.
+    const CONTEXT = {
+        'Red Barrel': ['Steel Barrel'],            // barrels are stored together
+        'Blue Crate': ['Cargo Box'],               // crates sit with the other shipping boxes
+        'Equipment Desk': ['Industrial Table'],    // desk and workbench share the workshop area
+        'Industrial Table': ['Equipment Desk'],
+    };
+    const TARGET_NAMES = Object.keys(CATALOG);
+    const UNIQUE_NAMES = TARGET_NAMES.filter(n => CATALOG[n].unique);
+    const CLUTTER_NAMES = TARGET_NAMES.filter(n => !CATALOG[n].unique);
+    const hexCss = (h) => '#' + h.toString(16).padStart(6, '0');
+
+    // =====================================================================
+    //  LANGUAGE GROUNDING: free-text command  ->  object class
+    //  (keyword/synonym + colour-attribute scoring with typo tolerance)
+    // =====================================================================
+    function editDistance1(a, b) {
+        if (Math.abs(a.length - b.length) > 1) return false;
+        let i = 0, j = 0, edits = 0;
+        while (i < a.length && j < b.length) {
+            if (a[i] === b[j]) { i++; j++; continue; }
+            if (++edits > 1) return false;
+            if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+        }
+        return edits + (a.length - i) + (b.length - j) <= 1;
+    }
+    function wordMatches(tok, kw) {
+        if (tok === kw || tok === kw + 's' || tok === kw + 'es') return true;
+        return kw.length >= 5 && tok.length >= 4 && editDistance1(tok, kw);
+    }
+    function parseGoal(text) {
+        const toks = text.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean);
+        let best = null;
+        for (const name of TARGET_NAMES) {
+            const c = CATALOG[name];
+            let score = 0; const hits = [];
+            for (const t of toks) {
+                if (c.nouns.some(k => wordMatches(t, k))) { score += 3; hits.push(t); }
+                else if (c.weak.some(k => wordMatches(t, k))) { score += 2; hits.push(t); }
+                else if (c.attrs.some(k => wordMatches(t, k))) { score += 2; hits.push(t); }
+            }
+            if (score > 0 && (!best || score > best.score)) best = { name, score, hits };
+        }
+        return best;   // null = nothing in the prompt refers to a known object
+    }
+
+    // =====================================================================
+    //  WORLD GENERATION (pure data — used by the live view and the benchmark)
+    // =====================================================================
+    function generateWorld(rng, sx, sz) {
+        const objs = [];
+        const GAP = 6.0;                    // every free corridor is at least 6 m wide
+        const ok = (x, z, r) => {
+            if (Math.abs(x) > WALL_IN - r - GAP || Math.abs(z) > WALL_IN - r - GAP) return false;
+            if (Math.hypot(x - sx, z - sz) < r + 10) return false;
+            for (const o of objs) if (Math.hypot(x - o.x, z - o.z) < r + o.r + GAP) return false;
+            return true;
+        };
+        const add = (name, x, z) => objs.push({
+            name, kind: CATALOG[name].kind, r: CATALOG[name].r, color: CATALOG[name].color, x, z, yaw: rng() * TAU
+        });
+        // Unique landmarks far from the start. Red barrel, blue crate and table each get their own
+        // quadrant; the desk shares the table's "workshop" quadrant.
+        const quads = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+        for (let i = quads.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [quads[i], quads[j]] = [quads[j], quads[i]]; }
+        const placeNear = (name, ax, az, dMin, dMax) => {
+            const r = CATALOG[name].r;
+            for (let k = 0; k < 400; k++) {
+                const a = rng() * TAU, d = dMin + rng() * (dMax - dMin);
+                const x = ax + Math.sin(a) * d, z = az + Math.cos(a) * d;
+                if (ok(x, z, r)) { add(name, x, z); return true; }
+            }
+            return false;
+        };
+        const quadOf = { 'Red Barrel': 0, 'Blue Crate': 1, 'Industrial Table': 2, 'Equipment Desk': 2 };
+        UNIQUE_NAMES.forEach((name) => {
+            const r = CATALOG[name].r, q = quads[quadOf[name] !== undefined ? quadOf[name] : 3];
+            const partner = name === 'Equipment Desk' ? objs.find(o => o.name === 'Industrial Table') : null;
+            if (partner && placeNear(name, partner.x, partner.z, 10, 18)) return;
+            for (let k = 0; k < 400; k++) {
+                const x = q[0] * (24 + rng() * 26), z = q[1] * (24 + rng() * 26);
+                if (ok(x, z, r)) { add(name, x, z); return; }
+            }
+        });
+        // Storage zones, like a real warehouse: steel barrels are stored around the red barrel and cargo
+        // boxes around the blue crate - plus a couple of strays elsewhere so the habit isn't a giveaway.
+        for (const name of ['Red Barrel', 'Blue Crate']) {
+            const o = objs.find(p => p.name === name);
+            if (!o) continue;
+            for (const nb of CONTEXT[name]) for (let n = 0; n < 4; n++) placeNear(nb, o.x, o.z, 7, 16);
+        }
+        const strays = ['Steel Barrel', 'Steel Barrel', 'Cargo Box', 'Cargo Box'];
+        for (let tries = 0; strays.length && tries < 2000; tries++) {
+            const name = strays[strays.length - 1], r = CATALOG[name].r;
+            const x = (rng() - 0.5) * 2 * (WALL_IN - 8), z = (rng() - 0.5) * 2 * (WALL_IN - 8);
+            if (ok(x, z, r)) { add(name, x, z); strays.pop(); }
+        }
+        // The rest of the clutter: safety pillars spread across the floor
+        for (let tries = 0; objs.length < 28 && tries < 6000; tries++) {
+            const name = 'Safety Pillar';
+            const r = CATALOG[name].r;
+            const x = (rng() - 0.5) * 2 * (WALL_IN - 8), z = (rng() - 0.5) * 2 * (WALL_IN - 8);
+            if (ok(x, z, r)) add(name, x, z);
+        }
+        objs.forEach((o, i) => o.idx = i);
+        return objs;
+    }
+
+    // =====================================================================
+    //  ROBOT BRAIN:  Sense (LiDAR + camera detector) -> Map -> Think (FSM + VFH planner) -> Act
+    // =====================================================================
+    const DEFAULT_PARAMS = {
+        maxSpeed: 5.0,          // m/s
+        maxTurn: 1.8,           // rad/s
+        maxAccel: 4.0,          // m/s^2
+        maxAngAccel: 7.0,       // rad/s^2
+        robotR: 2.0,            // collision radius (m)
+        safeR: 2.8,             // planner safety bubble (m)
+        lidarRange: 16,         // m
+        camRange: 28,           // m
+        camHalfFov: 35 * DEG,   // ±35° horizontal
+        covRange: 24,           // m — area counted as "seen" by the camera
+        minConf: 0.42,          // detector threshold
+        reachMargin: 1.4,       // stop this far from the target surface
+        scanRate: 1.3,          // rad/s while doing a 360° scan
+        lookahead: 10,
+        wGoal: 1.0, wHead: 0.3, wObs: 2.0,
+        perceptionEvery: 3,     // physics runs at 60 Hz, perception + planning at 20 Hz
+        frontierDist: 12,       // frontier score = gain / (distance + frontierDist) - turnPenalty * turn
+        turnPenalty: 0.04,
+        wallMargin: 5,          // don't pick exploration waypoints closer than this to a wall
+        arriveR: 6,             // waypoint reached radius
+        arriveScanMin: 24,      // scan on arrival only if this many unexplored cells are around
+        useContext: true,       // search near the target's typical neighbours first (CONTEXT)
+        contextR: 18,           // m - frontiers this close to a mapped neighbour get the bonus
+        contextBoost: 3.0,      // their score is multiplied by (1 + contextBoost)
+    };
+
+    class Sim {
+        constructor(objs, params, seed) {
+            this.P = Object.assign({}, params);
+            this.objs = objs;
+            this.rng = mulberry32((seed ^ 0x9e3779b9) >>> 0);
+            this.robot = { x: 0, z: 0, a: 0, v: 0, w: 0 };
+            this.cmd = { v: 0, w: 0 };
+            this.t = 0; this.tick = 0;
+            this.lidar = new Float32Array(NR).fill(this.P.lidarRange);
+            this.lidarObj = new Int16Array(NR).fill(-1);
+            this.clr = new Float32Array(NR);
+            this.cov = new Uint8Array(GN * GN); this.covCount = 0;
+            this.blacklist = new Uint8Array(GN * GN);
+            this.occ = new Uint8Array(ON * ON);
+            this.known = new Map();         // semantic map: obj idx -> {name, x, z, conf, ...}
+            this.detections = [];
+            this.confNoise = new Float32Array(objs.length);
+            this.contact = new Uint8Array(objs.length); this.wallContact = false;
+            this.collisions = 0; this.recoveries = 0; this.pathLen = 0;
+            this.state = 'IDLE'; this.sub = ''; this.avoidUntil = -1;
+            this.goalName = null; this.missionDone = false; this.result = null;
+            this.missionStart = 0; this.col0 = 0; this.path0 = 0;
+            this.scanLeft = 0; this.scanDir = 1; this.waypoint = null; this.recover = null;
+            this.navTarget = -1; this.navSince = 0;
+            this.stuckHist = [];
+            this.planDir = 0; this.planning = false; this.lastAvoidId = -9; this.lastAvoidLog = -99;
+            this.logs = []; this.logSeq = 0; this.quiet = false;
+            this.ctxReplan = false; this.ctxLogged = new Set();
+        }
+
+        log(msg, kind = 'info') {
+            if (this.quiet) return;
+            this.logs.push({ t: this.t, msg, kind, seq: ++this.logSeq });
+            if (this.logs.length > 40) this.logs.shift();
+        }
+        gauss() {
+            const u = Math.max(1e-9, this.rng()), v = this.rng();
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
+        }
+
+        // ---------------- mission control ----------------
+        setGoal(name) {
+            this.goalName = name;
+            this.missionDone = false; this.result = null;
+            this.missionStart = this.t; this.col0 = this.collisions; this.path0 = this.pathLen;
+            this.waypoint = null; this.recover = null; this.navTarget = -1; this.stuckHist.length = 0;
+            this.state = 'SEARCHING'; this.sub = '';
+            this.ctxReplan = false; this.ctxLogged = new Set();
+            this.known.forEach(k => { k.stale = false; });
+            const k = this.bestKnownTarget();
+            if (k) { this.state = 'NAVIGATING'; this.sub = 'recalled from semantic map'; }
+            if (k) {
+                this.scanLeft = 0;
+                this.log(`Goal "${name}": already in my semantic map → navigating from memory`, 'map');
+            } else {
+                this.log(`Goal "${name}": not in my map yet → exploring`, 'plan');
+                this.startScan();
+            }
+        }
+        startScan() {
+            this.scanLeft = TAU; this.scanBest = Infinity; this.scanStall = 0;
+            // spin toward the side with more unexplored cells
+            const r = this.robot; let left = 0, right = 0;
+            this.forCellsInRadius(r.x, r.z, this.P.covRange, (idx, cx, cz) => {
+                if (this.cov[idx]) return;
+                if (wrapAngle(bearingTo(r.x, r.z, cx, cz) - r.a) > 0) left++; else right++;
+            });
+            this.scanDir = left >= right ? 1 : -1;
+            this.log('360° scan to look around', 'plan');
+        }
+        bestKnownTarget() {
+            let best = null, bd = Infinity;
+            for (const k of this.known.values()) {
+                if (k.name !== this.goalName || k.stale) continue;
+                const d = Math.hypot(k.x - this.robot.x, k.z - this.robot.z);
+                if (d < bd) { bd = d; best = k; }
+            }
+            return best;
+        }
+        reachGoal(o) {
+            this.state = 'GOAL_REACHED'; this.sub = 'mission complete';
+            this.missionDone = true; this.cmd.v = 0; this.cmd.w = 0;
+            this.result = { time: this.t - this.missionStart, path: this.pathLen - this.path0, collisions: this.collisions - this.col0 };
+            this.log(`✅ Reached ${o.name} in ${this.result.time.toFixed(1)} s · ${this.result.path.toFixed(0)} m driven · ${this.result.collisions} collisions`, 'goal');
+        }
+
+        // ---------------- main loop ----------------
+        step(dt) {
+            this.t += dt; this.tick++;
+            if (this.tick % this.P.perceptionEvery === 1 || this.P.perceptionEvery === 1) {
+                this.senseLidar();
+                this.senseCamera();
+                this.updateCoverage();
+                this.updateOccupancy();
+                this.think();
+                this.monitorStuck();
+            }
+            this.integrate(dt);
+        }
+
+        // ---------------- SENSE: 360° LiDAR (ray casting) ----------------
+        senseLidar() {
+            const r = this.robot, R = this.P.lidarRange;
+            const near = [];
+            for (const o of this.objs) if (Math.hypot(o.x - r.x, o.z - r.z) - o.r < R) near.push(o);
+            for (let j = 0; j < NR; j++) {
+                const dx = RAY_DX[j], dz = RAY_DZ[j];
+                let best = R, hit = -1, t;
+                if (dx > 1e-6) { t = (WALL_IN - r.x) / dx; if (t < best) { best = t; hit = -2; } }
+                else if (dx < -1e-6) { t = (-WALL_IN - r.x) / dx; if (t < best) { best = t; hit = -2; } }
+                if (dz > 1e-6) { t = (WALL_IN - r.z) / dz; if (t < best) { best = t; hit = -2; } }
+                else if (dz < -1e-6) { t = (-WALL_IN - r.z) / dz; if (t < best) { best = t; hit = -2; } }
+                for (const o of near) {
+                    const fx = r.x - o.x, fz = r.z - o.z;
+                    const b = fx * dx + fz * dz;
+                    const c = fx * fx + fz * fz - o.r * o.r;
+                    const disc = b * b - c;
+                    if (disc < 0) continue;
+                    const s = Math.sqrt(disc);
+                    let th = -b - s;
+                    if (th < 0) th = (c < 0) ? 0 : -b + s;
+                    if (th >= 0 && th < best) { best = th; hit = o.idx; }
+                }
+                this.lidar[j] = Math.max(0, best); this.lidarObj[j] = hit;
+            }
+        }
+
+        // ---------------- SENSE: camera object detector (simulated) ----------------
+        // Outputs what YOLO outputs (class, box, confidence). Confidence falls with distance,
+        // off-axis angle and occlusion; fully occluded objects are not detected.
+        rayBlocked(ox, oz, ang, maxD, self) {
+            const dx = -Math.sin(ang), dz = -Math.cos(ang);
+            for (const o of this.objs) {
+                if (o.idx === self) continue;
+                const fx = ox - o.x, fz = oz - o.z;
+                const b = fx * dx + fz * dz;
+                if (b > o.r) continue;
+                const c = fx * fx + fz * fz - o.r * o.r;
+                const disc = b * b - c;
+                if (disc < 0) continue;
+                const th = -b - Math.sqrt(disc);
+                if (th > 0 && th < maxD) return true;
+            }
+            return false;
+        }
+        senseCamera() {
+            const r = this.robot, P = this.P;
+            const dets = [];
+            for (const o of this.objs) {
+                const dx = o.x - r.x, dz = o.z - r.z;
+                const d = Math.hypot(dx, dz);
+                if (d > P.camRange + o.r) continue;
+                const b = Math.atan2(-dx, -dz);
+                const off = wrapAngle(b - r.a);
+                const angR = Math.asin(Math.min(1, o.r / Math.max(d, 1e-3)));
+                if (Math.abs(off) - angR > P.camHalfFov) continue;
+                let vis = 0;
+                for (const s of [-0.7, 0, 0.7]) {
+                    const ang = b + s * angR;
+                    if (Math.abs(wrapAngle(ang - r.a)) > P.camHalfFov) continue;
+                    if (!this.rayBlocked(r.x, r.z, ang, d, o.idx)) vis++;
+                }
+                if (vis === 0) continue;
+                const visFrac = vis / 3;
+                this.confNoise[o.idx] = this.confNoise[o.idx] * 0.85 + (this.rng() * 2 - 1) * 0.012;
+                let conf = 0.97 - 0.30 * (d / P.camRange) ** 2 - 0.10 * (off / P.camHalfFov) ** 2 - 0.35 * (1 - visFrac) + this.confNoise[o.idx];
+                conf = clamp(conf, 0, 0.99);
+                if (conf < P.minConf) continue;
+                dets.push({ idx: o.idx, name: o.name, d, off, conf, isGoal: o.name === this.goalName });
+            }
+            dets.sort((a, b) => a.d - b.d);
+            this.detections = dets;
+
+            // Update the semantic map with (noisy) position estimates
+            for (const det of dets) {
+                const o = this.objs[det.idx];
+                const sigma = 0.025 * det.d + 0.05;
+                const ex = o.x + this.gauss() * sigma, ez = o.z + this.gauss() * sigma;
+                let k = this.known.get(det.idx);
+                if (!k) {
+                    k = { idx: det.idx, name: o.name, x: ex, z: ez, conf: det.conf, first: this.t, last: this.t, stale: false };
+                    this.known.set(det.idx, k);
+                    if (det.isGoal) {
+                        this.log(`🎯 Spotted ${o.name} at ${det.d.toFixed(1)} m (${Math.round(det.conf * 100)}%) → navigating`, 'goal');
+                    } else {
+                        this.log(`Mapped ${o.name} at ${det.d.toFixed(1)} m (${Math.round(det.conf * 100)}%)`, 'map');
+                        if (this.isContextFor(o.name)) this.ctxReplan = true;   // a likely spot just appeared
+                    }
+                } else {
+                    k.x += (ex - k.x) * 0.25; k.z += (ez - k.z) * 0.25;
+                    k.conf = Math.max(k.conf * 0.98, det.conf); k.last = this.t; k.stale = false;
+                }
+            }
+        }
+
+        // ---------------- MAP: exploration coverage + occupancy ----------------
+        forCellsInRadius(x, z, rad, fn) {
+            const i0 = Math.max(0, Math.floor((x - rad + HALF) / GC)), i1 = Math.min(GN - 1, Math.floor((x + rad + HALF) / GC));
+            const j0 = Math.max(0, Math.floor((z - rad + HALF) / GC)), j1 = Math.min(GN - 1, Math.floor((z + rad + HALF) / GC));
+            for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+                const cx = -HALF + (i + 0.5) * GC, cz = -HALF + (j + 0.5) * GC;
+                if (Math.hypot(cx - x, cz - z) <= rad) fn(i * GN + j, cx, cz);
+            }
+        }
+        updateCoverage() {
+            const r = this.robot, P = this.P;
+            this.forCellsInRadius(r.x, r.z, P.covRange, (idx, cx, cz) => {
+                if (this.cov[idx]) return;
+                const d = Math.hypot(cx - r.x, cz - r.z);
+                if (d > 4) {
+                    const b = bearingTo(r.x, r.z, cx, cz);
+                    if (Math.abs(wrapAngle(b - r.a)) > P.camHalfFov) return;
+                    const lj = rayIndex(b);
+                    if (this.lidar[lj] < P.lidarRange - 1e-3 && this.lidar[lj] < d - 2.5) return;   // occluded
+                }
+                this.cov[idx] = 1; this.covCount++;
+            });
+        }
+        updateOccupancy() {
+            const r = this.robot;
+            for (let j = 0; j < NR; j++) {
+                if (this.lidarObj[j] === -1) continue;
+                const d = this.lidar[j] + 0.4;
+                const hx = r.x + RAY_DX[j] * d, hz = r.z + RAY_DZ[j] * d;
+                const i = Math.floor((hx + HALF) / OC), k = Math.floor((hz + HALF) / OC);
+                if (i < 0 || k < 0 || i >= ON || k >= ON) continue;
+                const idx = i * ON + k;
+                if (this.occ[idx] < 255) this.occ[idx]++;
+            }
+        }
+        occNear(x, z, rad) {
+            const i0 = Math.max(0, Math.floor((x - rad + HALF) / OC)), i1 = Math.min(ON - 1, Math.floor((x + rad + HALF) / OC));
+            const k0 = Math.max(0, Math.floor((z - rad + HALF) / OC)), k1 = Math.min(ON - 1, Math.floor((z + rad + HALF) / OC));
+            for (let i = i0; i <= i1; i++) for (let k = k0; k <= k1; k++) if (this.occ[i * ON + k]) return true;
+            return false;
+        }
+        gainAt(i, j) {
+            let g = 0;
+            for (let a = Math.max(0, i - 2); a <= Math.min(GN - 1, i + 2); a++)
+                for (let b = Math.max(0, j - 2); b <= Math.min(GN - 1, j + 2); b++)
+                    if (!this.cov[a * GN + b]) g++;
+            return g;
+        }
+        unseenNear(x, z, rad) {
+            let n = 0;
+            this.forCellsInRadius(x, z, rad, (idx) => { if (!this.cov[idx]) n++; });
+            return n;
+        }
+        isContextFor(name) {
+            return this.P.useContext && !!this.goalName && (CONTEXT[this.goalName] || []).includes(name);
+        }
+        contextAnchors() {
+            const out = [];
+            if (!this.P.useContext || !this.goalName) return out;
+            for (const k of this.known.values()) if (this.isContextFor(k.name)) out.push(k);
+            return out;
+        }
+        // Frontier exploration: go where the most unexplored area is, cheaply reachable - and, if the
+        // target's typical neighbours are already on the map, look around them first.
+        pickWaypoint() {
+            const r = this.robot;
+            const anchors = this.contextAnchors(), cR2 = this.P.contextR * this.P.contextR;
+            let best = -1, bestScore = -Infinity, bestAnchor = null;
+            for (let i = 0; i < GN; i++) for (let j = 0; j < GN; j++) {
+                const idx = i * GN + j;
+                if (this.cov[idx] || this.blacklist[idx]) continue;
+                const cx = -HALF + (i + 0.5) * GC, cz = -HALF + (j + 0.5) * GC;
+                if (Math.abs(cx) > WALL_IN - this.P.wallMargin || Math.abs(cz) > WALL_IN - this.P.wallMargin) continue;
+                const d = Math.hypot(cx - r.x, cz - r.z);
+                if (d < 8) continue;
+                if (this.occNear(cx, cz, 3.5)) continue;
+                const turn = Math.abs(wrapAngle(bearingTo(r.x, r.z, cx, cz) - r.a));
+                let anchor = null;
+                for (const a of anchors) if ((cx - a.x) ** 2 + (cz - a.z) ** 2 < cR2) { anchor = a; break; }
+                const boost = anchor ? 1 + this.P.contextBoost : 1;
+                const score = boost * this.gainAt(i, j) / (d + this.P.frontierDist) - this.P.turnPenalty * turn;
+                if (score > bestScore) { bestScore = score; best = idx; bestAnchor = anchor; }
+            }
+            if (best < 0) return false;
+            const i = Math.floor(best / GN), j = best % GN;
+            this.waypoint = { i, j, idx: best, x: -HALF + (i + 0.5) * GC, z: -HALF + (j + 0.5) * GC, t0: this.t, context: !!bestAnchor };
+            if (bestAnchor) {
+                const plural = this.goalName.toLowerCase() + (this.goalName.endsWith('s') ? '' : 's');
+                if (!this.ctxLogged.has(bestAnchor.idx)) {
+                    this.ctxLogged.add(bestAnchor.idx);
+                    this.log(`💡 ${bestAnchor.name} on my map: ${plural} are usually nearby → searching there first`, 'plan');
+                } else {
+                    this.log(`Searching near the ${bestAnchor.name.toLowerCase()} (likely spot) · ${this.gainAt(i, j)} unexplored cells`, 'plan');
+                }
+            } else {
+                this.log(`New frontier waypoint (${this.waypoint.x.toFixed(0)}, ${this.waypoint.z.toFixed(0)}) · ${this.gainAt(i, j)} unexplored cells nearby`, 'plan');
+            }
+            return true;
+        }
+
+        // ---------------- THINK: finite-state machine + local planner ----------------
+        // VFH-style planner: from the LiDAR scan, compute how far the robot's safety bubble can
+        // travel in each of 72 directions, then pick the open direction closest to the goal.
+        clearance(k, ignore) {
+            const R = this.P.safeR, R2 = R * R;
+            let c = this.P.lidarRange;
+            for (let j = 0; j < NR; j++) {
+                const d = this.lidar[j];
+                if (d >= this.P.lidarRange - 1e-3) continue;
+                if (ignore >= 0 && this.lidarObj[j] === ignore) continue;
+                const idx = (j - k + NR) % NR;
+                const proj = d * COS_D[idx];
+                if (proj <= 0) continue;
+                const perp = d * SIN_D[idx];
+                const p2 = perp * perp;
+                if (p2 < R2) { const cc = proj - Math.sqrt(R2 - p2); if (cc < c) c = cc; }
+            }
+            return c < 0 ? 0 : c;
+        }
+        think() {
+            const r = this.robot, P = this.P;
+            this.planning = false;
+            if (!this.goalName || this.state === 'GOAL_REACHED') { this.cmd.v = 0; this.cmd.w = 0; return; }
+
+            // Goal check against the best belief of where the target is
+            let tgt = this.bestKnownTarget();
+            if (tgt) {
+                const o = this.objs[tgt.idx];
+                if (Math.hypot(o.x - r.x, o.z - r.z) < o.r + P.robotR + P.reachMargin) { this.reachGoal(o); return; }
+            }
+            if (this.recover) { this.runRecovery(); return; }
+
+            let gx, gz, ignore = -1, mode;
+            if (tgt) {
+                this.scanLeft = 0;
+                if (this.navTarget !== tgt.idx) { this.navTarget = tgt.idx; this.navSince = this.t; }
+                else if (this.t - this.navSince > 50) {
+                    tgt.stale = true; this.navTarget = -1;
+                    this.log(`Could not confirm ${tgt.name} — marking belief stale, exploring again`, 'warn');
+                    return;
+                }
+                gx = tgt.x; gz = tgt.z; ignore = tgt.idx; mode = 'NAV';
+            } else {
+                this.navTarget = -1;
+                if (this.scanLeft > 0) {
+                    this.state = 'SEARCHING';
+                    if (Math.abs(r.v) > 0.15) {             // brake in a straight line before spinning
+                        this.sub = 'braking for scan'; this.cmd.v = 0; this.cmd.w = 0; return;
+                    }
+                    // adaptive scan: stop early once turning further reveals nothing new
+                    const unseen = this.unseenNear(r.x, r.z, P.covRange);
+                    if (unseen < this.scanBest) { this.scanBest = unseen; this.scanStall = 0; }
+                    if (unseen < 4 || this.scanStall > 1.75) {
+                        this.scanLeft = 0;
+                    } else {
+                        this.sub = '360° scan'; this.cmd.v = 0; this.cmd.w = P.scanRate * this.scanDir; return;
+                    }
+                }
+                if (this.ctxReplan) {
+                    this.ctxReplan = false;
+                    if (this.waypoint && !this.waypoint.context) this.waypoint = null;   // re-plan toward the likely spot
+                }
+                if (this.waypoint) {
+                    const w = this.waypoint;
+                    const d = Math.hypot(w.x - r.x, w.z - r.z);
+                    if (d < P.arriveR) {
+                        this.waypoint = null;
+                        if (this.unseenNear(r.x, r.z, P.covRange) >= P.arriveScanMin) { this.startScan(); return; }
+                    } else if (this.gainAt(w.i, w.j) === 0) {
+                        this.waypoint = null;
+                    } else if (this.t - w.t0 > 25) {
+                        this.blacklist[w.idx] = 1; this.waypoint = null;
+                        this.log('Waypoint taking too long — choosing another', 'warn');
+                    }
+                }
+                if (!this.waypoint && !this.pickWaypoint()) {
+                    this.cov.fill(0); this.blacklist.fill(0); this.covCount = 0;
+                    this.log('Whole map explored without a match — re-scanning everything', 'warn');
+                    this.startScan();
+                    return;
+                }
+                gx = this.waypoint.x; gz = this.waypoint.z; mode = 'EXPLORE';
+            }
+
+            // ---- local planner ----
+            const goalB = bearingTo(r.x, r.z, gx, gz);
+            const dGoal = Math.hypot(gx - r.x, gz - r.z);
+            const look = Math.min(Math.max(dGoal, 3), P.lookahead);
+            const clr = this.clr;
+            for (let k = 0; k < NR; k++) clr[k] = this.clearance(k, ignore);
+            let best = -1, bestCost = Infinity;
+            for (let k = 0; k < NR; k++) {
+                if (clr[k] < 0.6) continue;
+                let cost = P.wGoal * Math.abs(wrapAngle(RAY_ANG[k] - goalB)) + P.wHead * Math.abs(wrapAngle(RAY_ANG[k] - r.a));
+                if (clr[k] < look) cost += P.wObs * (1 - clr[k] / look);
+                if (cost < bestCost) { bestCost = cost; best = k; }
+            }
+            let avoiding;
+            const kHead = rayIndex(r.a);
+            if (best < 0) {
+                // boxed in: rotate on the spot and let the stuck monitor take over if needed
+                this.cmd.v = 0; this.cmd.w = P.maxTurn * 0.6; avoiding = true;
+            } else {
+                const phi = RAY_ANG[best];
+                this.planDir = phi; this.planning = true;
+                const err = wrapAngle(phi - r.a);
+                let v = P.maxSpeed * clamp((clr[best] - 0.5) / 7, 0.15, 1) * Math.pow(Math.max(0, Math.cos(err)), 2);
+                if (mode === 'NAV') {
+                    const stopD = this.objs[ignore].r + P.robotR + P.reachMargin;
+                    v *= clamp((dGoal - stopD) / 6 + 0.25, 0.25, 1);
+                }
+                if (clr[kHead] < 0.3 && Math.abs(err) > 0.8 && this.arcSafe(-0.5, 0, 0.6)) v = -0.5;   // nose too close: ease back while turning
+                this.cmd.v = v;
+                this.cmd.w = clamp(3.0 * err, -P.maxTurn, P.maxTurn);
+                const kGoal = rayIndex(goalB);
+                avoiding = (clr[kGoal] < Math.min(dGoal, 6) && Math.abs(wrapAngle(phi - goalB)) > 0.35) || clr[kHead] < 1.0;
+            }
+            if (avoiding) {
+                if (this.t >= this.avoidUntil) {
+                    // name the obstacle that triggered avoidance (closest LiDAR return ahead)
+                    let mj = -1, md = Infinity;
+                    for (let j = 0; j < NR; j++) {
+                        if (Math.abs(wrapAngle(RAY_ANG[j] - r.a)) > 0.9 || this.lidarObj[j] === ignore) continue;
+                        if (this.lidar[j] < md) { md = this.lidar[j]; mj = j; }
+                    }
+                    if (mj >= 0 && this.lidarObj[mj] !== -1) {
+                        const id = this.lidarObj[mj];
+                        if (id !== this.lastAvoidId || this.t - this.lastAvoidLog > 4) {
+                            const what = id === -2 ? 'wall' : this.objs[id].name;
+                            this.log(`Obstacle ahead: ${what} at ${md.toFixed(1)} m → steering around`, 'warn');
+                            this.lastAvoidId = id; this.lastAvoidLog = this.t;
+                        }
+                    }
+                }
+                this.avoidUntil = this.t + 0.5;
+            }
+            const showAvoid = this.t < this.avoidUntil;
+            this.state = showAvoid ? 'AVOIDING' : (mode === 'NAV' ? 'NAVIGATING' : 'SEARCHING');
+            this.sub = mode === 'NAV' ? `to ${tgt.name} · ${dGoal.toFixed(1)} m` : 'exploring frontier';
+            this.safetyGovernor();
+        }
+
+        // Independent safety layer (like a safety-rated scanner field): whatever the planner wants,
+        // forward speed is capped so the robot can always stop before touching anything in its path.
+        safetyGovernor() {
+            const r = this.robot, P = this.P;
+            const W = P.robotR + 0.35, W2 = W * W;
+            let free = Infinity;
+            for (let j = 0; j < NR && this.cmd.v > 0; j++) {
+                const da = wrapAngle(RAY_ANG[j] - r.a);
+                if (Math.abs(da) > 1.4) continue;
+                const d = this.lidar[j];
+                const proj = d * Math.cos(da), perp = d * Math.sin(da);
+                if (proj <= 0 || perp * perp >= W2) continue;
+                free = Math.min(free, proj - Math.sqrt(W2 - perp * perp));
+            }
+            if (free !== Infinity) {
+                const vmax = Math.sqrt(2 * P.maxAccel * 0.8 * Math.max(0, free - 0.25));
+                if (this.cmd.v > vmax) this.cmd.v = vmax;
+            }
+            // Anything near the front half of the body also limits speed (the robot may turn toward it)
+            let gapFront = Infinity;
+            for (let j = 0; j < NR; j++) {
+                if (Math.abs(wrapAngle(RAY_ANG[j] - r.a)) < 1.4) gapFront = Math.min(gapFront, this.lidar[j] - P.robotR);
+            }
+            const vNear = Math.sqrt(2 * P.maxAccel * 0.8 * Math.max(0, gapFront - 0.3)) + 0.3;
+            if (this.cmd.v > vNear) this.cmd.v = vNear;
+            // Predict the next 0.4 s along the commanded arc, for both the current momentum and the
+            // commanded speed (speed can't change instantly); if it would bring the body into contact,
+            // try gentler turns.
+            const tryW = [this.cmd.w, this.cmd.w * 0.5, 0, -this.cmd.w * 0.5];
+            for (const w of tryW) {
+                if (this.arcSafe(r.v, w, 0.4) && this.arcSafe(this.cmd.v, w, 0.4)) { this.cmd.w = w; return; }
+            }
+            // Nothing is fully safe: brake, and steer along the arc that keeps the most distance
+            let bestW = 0, bestGap = -Infinity;
+            for (const w of [-P.maxTurn, -P.maxTurn / 2, 0, P.maxTurn / 2, P.maxTurn]) {
+                const g = this.arcGap(r.v, w, 0.4);
+                if (g > bestGap) { bestGap = g; bestW = w; }
+            }
+            this.cmd.v = 0; this.cmd.w = bestW;
+        }
+        arcGap(v, w, T) {
+            // smallest distance between the body and any LiDAR return along the predicted arc
+            const r = this.robot;
+            let g = Infinity;
+            for (const tt of [T / 3, 2 * T / 3, T]) {
+                const am = r.a + w * tt * 0.5;
+                const px = r.x - Math.sin(am) * v * tt, pz = r.z - Math.cos(am) * v * tt;
+                for (let j = 0; j < NR; j++) {
+                    const d = this.lidar[j];
+                    if (d >= this.P.lidarRange - 1e-3) continue;
+                    const hx = r.x + RAY_DX[j] * d, hz = r.z + RAY_DZ[j] * d;
+                    g = Math.min(g, Math.hypot(hx - px, hz - pz) - this.P.robotR);
+                }
+            }
+            return g;
+        }
+        arcSafe(v, w, T) {
+            if (Math.abs(v) < 0.05) return true;
+            const r = this.robot, lim = this.P.robotR + 0.12, lim2 = lim * lim;
+            for (const tt of [T / 3, 2 * T / 3, T]) {
+                const am = r.a + w * tt * 0.5;
+                const px = r.x - Math.sin(am) * v * tt, pz = r.z - Math.cos(am) * v * tt;
+                for (let j = 0; j < NR; j++) {
+                    const d = this.lidar[j];
+                    if (d >= this.P.lidarRange - 1e-3 || d > lim + Math.abs(v) * T + 0.5) continue;
+                    const hx = r.x + RAY_DX[j] * d, hz = r.z + RAY_DZ[j] * d;
+                    const dp2 = (hx - px) * (hx - px) + (hz - pz) * (hz - pz);
+                    if (dp2 < lim2 && dp2 < d * d - 0.01) return false;   // inside the margin AND getting closer
+                }
+            }
+            return true;
+        }
+
+        // ---------------- stuck detection & recovery ----------------
+        monitorStuck() {
+            const r = this.robot;
+            if (this.recover || this.scanLeft > 0 || this.state === 'GOAL_REACHED' || !this.goalName) { this.stuckHist.length = 0; return; }
+            this.stuckHist.push({ t: this.t, x: r.x, z: r.z });
+            while (this.stuckHist.length > 2 && this.t - this.stuckHist[1].t >= 3) this.stuckHist.shift();
+            const h = this.stuckHist[0];
+            if (this.t - h.t >= 3 && Math.hypot(r.x - h.x, r.z - h.z) < 0.8) {
+                this.recover = { phase: 'back', until: this.t + 0.9 };
+                this.recoveries++;
+                this.stuckHist.length = 0;
+                if (this.waypoint) { this.blacklist[this.waypoint.idx] = 1; this.waypoint = null; }
+                this.log('Stuck detected → backing up and re-planning', 'warn');
+            }
+        }
+        runRecovery() {
+            const rc = this.recover, r = this.robot, P = this.P;
+            this.state = 'AVOIDING'; this.sub = 'recovery manoeuvre';
+            if (rc.phase === 'back') {
+                let behind = Infinity;
+                for (let j = 0; j < NR; j++) if (Math.abs(wrapAngle(RAY_ANG[j] - r.a - Math.PI)) < 0.6) behind = Math.min(behind, this.lidar[j]);
+                this.cmd.v = -1.5; this.cmd.w = 0;
+                if (this.t > rc.until || behind < P.robotR + 0.6 || !this.arcSafe(-1.5, 0, 0.4)) {
+                    this.cmd.v = 0;
+                    let bk = 0, bc = -1;
+                    for (let k = 0; k < NR; k++) { const c = this.clearance(k, -1); if (c > bc) { bc = c; bk = k; } }
+                    rc.phase = 'turn'; rc.dir = RAY_ANG[bk]; rc.until = this.t + 2.0;
+                }
+            } else {
+                const err = wrapAngle(rc.dir - r.a);
+                this.cmd.v = 0; this.cmd.w = clamp(3 * err, -P.maxTurn, P.maxTurn);
+                if (Math.abs(err) < 0.15 || this.t > rc.until) this.recover = null;
+            }
+        }
+
+        // ---------------- ACT: differential-drive kinematics + collision handling ----------------
+        integrate(dt) {
+            const r = this.robot, P = this.P;
+            r.v += clamp(this.cmd.v - r.v, -P.maxAccel * dt, P.maxAccel * dt);
+            r.w += clamp(this.cmd.w - r.w, -P.maxAngAccel * dt, P.maxAngAccel * dt);
+            r.a = wrapAngle(r.a + r.w * dt);
+            const ox = r.x, oz = r.z;
+            r.x += -Math.sin(r.a) * r.v * dt;
+            r.z += -Math.cos(r.a) * r.v * dt;
+            // physical contact with objects (counted honestly as collisions)
+            for (const o of this.objs) {
+                const dx = r.x - o.x, dz = r.z - o.z, minD = P.robotR + o.r;
+                const d2 = dx * dx + dz * dz;
+                if (d2 < minD * minD) {
+                    const d = Math.sqrt(d2) || 1e-6, push = minD - d;
+                    r.x += dx / d * push; r.z += dz / d * push;
+                    if (!this.contact[o.idx]) { this.contact[o.idx] = 1; this.collisions++; this.log(`⚠ Contact with ${o.name}`, 'warn'); }
+                } else if (this.contact[o.idx] && d2 > (minD + 0.5) * (minD + 0.5)) {
+                    this.contact[o.idx] = 0;
+                }
+            }
+            const lim = WALL_IN - P.robotR;
+            if (Math.abs(r.x) > lim || Math.abs(r.z) > lim) {
+                r.x = clamp(r.x, -lim, lim); r.z = clamp(r.z, -lim, lim);
+                if (!this.wallContact) { this.wallContact = true; this.collisions++; this.log('⚠ Contact with wall', 'warn'); }
+            } else if (this.wallContact && Math.abs(r.x) < lim - 0.5 && Math.abs(r.z) < lim - 0.5) {
+                this.wallContact = false;
+            }
+            this.pathLen += Math.hypot(r.x - ox, r.z - oz);
+            if (this.scanLeft > 0) { this.scanLeft -= Math.abs(r.w * dt); this.scanStall += Math.abs(r.w * dt); }
+        }
+    }
+
+    // =====================================================================
+    //  BENCHMARK (headless trials, same code as the live robot)
+    // =====================================================================
+    function runTrial(seed, goalName, timeout = 240, overrides = null) {
+        const rng = mulberry32(seed);
+        const objs = generateWorld(rng, 0, 0);
+        const s = new Sim(objs, overrides ? Object.assign({}, DEFAULT_PARAMS, overrides) : DEFAULT_PARAMS, seed);
+        s.quiet = true;
+        s.setGoal(goalName);
+        const DT = 1 / 60;
+        while (!s.missionDone && s.t < timeout) s.step(DT);
+        return {
+            seed, goal: goalName, success: s.missionDone,
+            time: s.missionDone ? s.result.time : timeout,
+            path: s.pathLen, collisions: s.collisions, recoveries: s.recoveries,
+            explored: s.covCount / (GN * GN)
+        };
+    }
+    function debugTrial(seed, goalName, timeout = 240) {
+        const rng = mulberry32(seed);
+        const objs = generateWorld(rng, 0, 0);
+        const s = new Sim(objs, DEFAULT_PARAMS, seed);
+        s.setGoal(goalName);
+        const DT = 1 / 60, events = [], traj = [];
+        let lastColl = 0, lastRec = 0;
+        while (!s.missionDone && s.t < timeout) {
+            s.step(DT);
+            if (s.tick % 15 === 0) traj.push([s.robot.x, s.robot.z, s.state[0]]);
+            if (s.recoveries !== lastRec) { lastRec = s.recoveries; events.push(`t=${s.t.toFixed(2)} RECOVERY pos=${s.robot.x.toFixed(1)},${s.robot.z.toFixed(1)} last=${s.logs.slice(-4).map(l => l.msg).join(' | ')}`); }
+            if (s.collisions !== lastColl) {
+                lastColl = s.collisions;
+                const r = s.robot;
+                events.push(`t=${s.t.toFixed(2)} COLL state=${s.state} sub=${s.sub} v=${r.v.toFixed(2)} w=${r.w.toFixed(2)} cmd=${s.cmd.v.toFixed(2)},${s.cmd.w.toFixed(2)} pos=${r.x.toFixed(1)},${r.z.toFixed(1)} last=${s.logs.slice(-3).map(l => l.msg).join(' | ')}`);
+            }
+        }
+        return { seed, goal: goalName, success: s.missionDone, time: s.t - s.missionStart, collisions: s.collisions, events, traj, objs: objs.map(o => [o.x, o.z, o.r, o.name]) };
+    }
+    function debugSim(seed, goalName) {
+        const objs = generateWorld(mulberry32(seed), 0, 0);
+        const s = new Sim(objs, DEFAULT_PARAMS, seed);
+        s.setGoal(goalName);
+        return s;
+    }
+    function summarize(results) {
+        const ok = results.filter(r => r.success);
+        const times = ok.map(r => r.time).sort((a, b) => a - b);
+        const q = (p) => times.length ? times[Math.min(times.length - 1, Math.floor(p * (times.length - 1) + 0.5))] : NaN;
+        const byGoal = {};
+        results.forEach(r => {
+            byGoal[r.goal] = byGoal[r.goal] || { n: 0, ok: 0, t: [] };
+            byGoal[r.goal].n++; if (r.success) { byGoal[r.goal].ok++; byGoal[r.goal].t.push(r.time); }
+        });
+        return {
+            n: results.length, success: ok.length, successRate: ok.length / Math.max(1, results.length),
+            median: q(0.5), p90: q(0.9), mean: times.reduce((a, b) => a + b, 0) / Math.max(1, times.length),
+            collisions: results.reduce((a, r) => a + r.collisions, 0),
+            trialsWithCollision: results.filter(r => r.collisions > 0).length,
+            recoveries: results.reduce((a, r) => a + r.recoveries, 0),
+            meanPath: ok.reduce((a, r) => a + r.path, 0) / Math.max(1, ok.length),
+            byGoal
+        };
+    }
+    function runBenchmarkSync(n = 50, startSeed = 1000, overrides = null) {
+        const results = [];
+        for (let i = 0; i < n; i++) results.push(runTrial(startSeed + i, UNIQUE_NAMES[i % UNIQUE_NAMES.length], 240, overrides));
+        return { results, summary: summarize(results) };
+    }
+
+    // =====================================================================
+    //  RENDERING: scene, renderers, cameras
+    // =====================================================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf1f4f9);
+    scene.fog = new THREE.Fog(0xf1f4f9, 110, 300);
+
+    const camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.1, 1500);
+    camera.position.set(0, 68, 85);
+    camera.layers.enable(1);   // layer 1 = debug overlays (rays, frustum, boxes) — hidden from the robot camera
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05;
+    controls.minDistance = 15;
+    controls.maxDistance = 280;
+    controls.target.set(0, 0, 0);
+
+    const povContainer = document.getElementById('pov-container');
+    const povCanvas = document.getElementById('pov-canvas');
+    const povCamera = new THREE.PerspectiveCamera(50, 1.6, 0.3, 160);
+    const povRenderer = new THREE.WebGLRenderer({ canvas: povCanvas, antialias: true });
+    povRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    povRenderer.shadowMap.enabled = true;
+    function resizePov() {
+        const w = povContainer.clientWidth, h = povContainer.clientHeight;
+        if (w < 10 || h < 10) return;
+        povRenderer.setSize(w, h, false);
+        povCamera.aspect = w / h;
+        // vertical FOV chosen so the horizontal FOV equals the detector's ±35°
+        povCamera.fov = 2 * Math.atan(Math.tan(DEFAULT_PARAMS.camHalfFov) / povCamera.aspect) / DEG;
+        povCamera.updateProjectionMatrix();
+    }
+    resizePov();
+
+    // ---------------- Lighting ----------------
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const sunLight = new THREE.DirectionalLight(0xfffaed, 1.0);
+    sunLight.position.set(50, 80, 50);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 260;
+    sunLight.shadow.camera.left = -80; sunLight.shadow.camera.right = 80;
+    sunLight.shadow.camera.top = 80; sunLight.shadow.camera.bottom = -80;
+    sunLight.shadow.bias = -0.0005;
+    scene.add(sunLight);
+    const fillLight = new THREE.DirectionalLight(0xdbeafe, 0.4);
+    fillLight.position.set(-50, 40, -50);
+    scene.add(fillLight);
+
+    function setLayerDeep(obj, layer) { obj.traverse(o => o.layers.set(layer)); }
+
+    // ---------------- Arena ----------------
+    const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE),
+        new THREE.MeshStandardMaterial({ color: 0xfdfdfd, roughness: 0.85, metalness: 0.1 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    const grid = new THREE.GridHelper(ARENA_SIZE, 60, 0x008eb8, 0xe2e8f0);
+    grid.position.y = 0.02;
+    scene.add(grid);
+
+    function createWall(x, z, w, d, h) {
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.5, metalness: 0.2 }));
+        wall.position.set(x, h / 2, z);
+        wall.castShadow = true; wall.receiveShadow = true;
+        scene.add(wall);
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(w, 0.2, d), new THREE.MeshStandardMaterial({ color: 0x008eb8, roughness: 0.3 }));
+        stripe.position.set(x, h + 0.1, z);
+        scene.add(stripe);
+    }
+    const wallH = 1.4;
+    createWall(0, -HALF, ARENA_SIZE + 0.8, 0.8, wallH);
+    createWall(0, HALF, ARENA_SIZE + 0.8, 0.8, wallH);
+    createWall(-HALF, 0, 0.8, ARENA_SIZE, wallH);
+    createWall(HALF, 0, 0.8, ARENA_SIZE, wallH);
+
+    // ---------------- Robot rover ----------------
+    const robotGroup = new THREE.Group();
+    const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.8, 3.2), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.4 }));
+    bodyMesh.position.y = 0.8; bodyMesh.castShadow = true; bodyMesh.receiveShadow = true;
+    robotGroup.add(bodyMesh);
+    const stripeMesh = new THREE.Mesh(new THREE.BoxGeometry(2.44, 0.2, 2.0), new THREE.MeshStandardMaterial({ color: 0x008eb8, roughness: 0.2 }));
+    stripeMesh.position.y = 0.8;
+    robotGroup.add(stripeMesh);
+    const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.35, 24);
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x222226, roughness: 0.9 });
+    const wheels = [];
+    [[-1.3, 0.5, 1.0], [1.3, 0.5, 1.0], [-1.3, 0.5, -1.0], [1.3, 0.5, -1.0]].forEach(pos => {
+        const w = new THREE.Mesh(wheelGeo, wheelMat);
+        w.rotation.z = Math.PI / 2; w.position.set(...pos); w.castShadow = true;
+        robotGroup.add(w); wheels.push(w);
+    });
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.7, 16), new THREE.MeshStandardMaterial({ color: 0x718096, metalness: 0.8 }));
+    mast.position.set(0, 1.45, 0.2);
+    robotGroup.add(mast);
+    const lidarHead = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.3, 20), new THREE.MeshStandardMaterial({ color: 0x1a202c, metalness: 0.6 }));
+    lidarHead.position.set(0, 1.85, 0.2); lidarHead.castShadow = true;
+    robotGroup.add(lidarHead);
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.25, 0.3), new THREE.MeshStandardMaterial({ color: 0x008eb8, roughness: 0.1, metalness: 0.8 }));
+    eye.position.set(0, 1.15, -1.55);
+    robotGroup.add(eye);
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 16), new THREE.MeshBasicMaterial({ color: 0x00ffcc }));
+    lens.rotation.x = Math.PI / 2; lens.position.set(0, 1.15, -1.72);
+    robotGroup.add(lens);
+
+    // Camera field of view: floor wedge (exact detection region) + 3D frustum edges
+    const CAM_HALF = DEFAULT_PARAMS.camHalfFov, CAM_RANGE = DEFAULT_PARAMS.camRange;
+    const fanMat = new THREE.MeshBasicMaterial({ color: 0x008eb8, transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false });
+    const fan = new THREE.Mesh(new THREE.CircleGeometry(CAM_RANGE, 40, Math.PI / 2 - CAM_HALF, 2 * CAM_HALF), fanMat);
+    fan.rotation.x = -Math.PI / 2; fan.position.y = 0.06;
+    robotGroup.add(fan);
+    const fy = Math.tan(14 * DEG) * CAM_RANGE, fx = Math.tan(CAM_HALF) * CAM_RANGE;
+    const apex = new THREE.Vector3(0, 1.15, -1.75);
+    const corners = [[-fx, fy], [fx, fy], [fx, -fy], [-fx, -fy]].map(([x, y]) => new THREE.Vector3(x, 1.15 + y, -1.75 - CAM_RANGE));
+    const frustumPts = [];
+    corners.forEach(c => frustumPts.push(apex.clone(), c));
+    for (let i = 0; i < 4; i++) frustumPts.push(corners[i], corners[(i + 1) % 4]);
+    const frustumMat = new THREE.LineBasicMaterial({ color: 0x008eb8, transparent: true, opacity: 0.35 });
+    const frustum = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(frustumPts), frustumMat);
+    robotGroup.add(frustum);
+    const scanRing = new THREE.Mesh(new THREE.RingGeometry(0.5, 3.0, 32), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false }));
+    scanRing.rotation.x = -Math.PI / 2; scanRing.position.set(0, 0.05, 0);
+    robotGroup.add(scanRing);
+    [fan, frustum, scanRing].forEach(o => setLayerDeep(o, 1));
+    scene.add(robotGroup);
+
+    // LiDAR rays (debug overlay)
+    const rayPos = new Float32Array(NR * 6), rayCol = new Float32Array(NR * 6);
+    const rayGeo = new THREE.BufferGeometry();
+    rayGeo.setAttribute('position', new THREE.BufferAttribute(rayPos, 3));
+    rayGeo.setAttribute('color', new THREE.BufferAttribute(rayCol, 3));
+    const rays = new THREE.LineSegments(rayGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.45, depthWrite: false }));
+    rays.frustumCulled = false;
+    setLayerDeep(rays, 1);
+    scene.add(rays);
+
+    // Planner output arrow
+    const planArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(), 7, 0x10b981, 1.6, 1.0);
+    setLayerDeep(planArrow, 1);
+    scene.add(planArrow);
+
+    // Exploration waypoint marker
+    const wpGroup = new THREE.Group();
+    const wpRing = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.1, 32), new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthWrite: false }));
+    wpRing.rotation.x = -Math.PI / 2; wpRing.position.y = 0.08;
+    const wpPole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.2, 8), new THREE.MeshBasicMaterial({ color: 0xf59e0b }));
+    wpPole.position.y = 1.6;
+    const wpFlag = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.9, 12), new THREE.MeshBasicMaterial({ color: 0xf59e0b }));
+    wpFlag.rotation.x = Math.PI; wpFlag.position.y = 3.6;
+    wpGroup.add(wpRing, wpPole, wpFlag);
+    setLayerDeep(wpGroup, 1);
+    wpGroup.visible = false;
+    scene.add(wpGroup);
+
+    // Trail (pre-allocated buffer)
+    const MAX_TRAIL = 600;
+    const trailPos = new Float32Array(MAX_TRAIL * 3);
+    const trailGeo = new THREE.BufferGeometry();
+    trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+    trailGeo.setDrawRange(0, 0);
+    const trailLine = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0x008eb8, transparent: true, opacity: 0.6 }));
+    trailLine.frustumCulled = false;
+    setLayerDeep(trailLine, 1);
+    scene.add(trailLine);
+    let trailCount = 0, lastTrail = null;
+    function resetTrail() { trailCount = 0; lastTrail = null; trailGeo.setDrawRange(0, 0); }
+    function pushTrail(x, z) {
+        if (lastTrail && Math.hypot(x - lastTrail[0], z - lastTrail[1]) < 0.5) return;
+        if (trailCount >= MAX_TRAIL) { trailPos.copyWithin(0, 3); trailCount--; }
+        trailPos[trailCount * 3] = x; trailPos[trailCount * 3 + 1] = 0.05; trailPos[trailCount * 3 + 2] = z;
+        trailCount++; lastTrail = [x, z];
+        trailGeo.attributes.position.needsUpdate = true;
+        trailGeo.setDrawRange(0, trailCount);
+    }
+
+    // Target beacons (shown to the audience only — the robot does NOT use them)
+    const beacons = [];
+    function makeBeacon() {
+        const g = new THREE.Group();
+        const ring = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.45, 32), new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide, transparent: true, opacity: 0.85 }));
+        ring.rotation.x = -Math.PI / 2; ring.position.y = 6.6;
+        const pin = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.2, 16), new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x10b981, emissiveIntensity: 0.6 }));
+        pin.rotation.x = Math.PI; pin.position.y = 7.6;
+        g.add(ring, pin); g.userData = { ring, pin };
+        setLayerDeep(g, 1);
+        scene.add(g);
+        return g;
+    }
+
+    // ---------------- Object meshes ----------------
+    function createObjectMesh(o) {
+        const group = new THREE.Group();
+        const std = (color, extra = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.5, metalness: 0.15 }, extra));
+        const add = (mesh, y) => { mesh.position.y = y; mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh); return mesh; };
+        if (o.kind === 'barrel') {
+            add(new THREE.Mesh(new THREE.CylinderGeometry(o.r, o.r, 3.8, 24), std(o.color, { roughness: 0.4, metalness: o.name === 'Steel Barrel' ? 0.6 : 0.3 })), 1.9);
+            [-0.8, 0, 0.8].forEach(ry => {
+                const rib = new THREE.Mesh(new THREE.TorusGeometry(o.r + 0.05, 0.06, 8, 24), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+                rib.rotation.x = Math.PI / 2; rib.position.y = 1.9 + ry; group.add(rib);
+            });
+        } else if (o.kind === 'crate') {
+            const s = 3.6;
+            const geo = new THREE.BoxGeometry(s, s, s);
+            add(new THREE.Mesh(geo, std(o.color, { roughness: 0.6 })), s / 2);
+            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x0d47a1 }));
+            edges.position.y = s / 2; group.add(edges);
+            group.rotation.y = o.yaw;
+        } else if (o.kind === 'box') {
+            const geo = new THREE.BoxGeometry(3.6, 3.0, 3.6);
+            add(new THREE.Mesh(geo, std(o.color, { roughness: 0.9, metalness: 0 })), 1.5);
+            add(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 3.62), std(0xe8d3b0, { roughness: 0.6, metalness: 0 })), 3.02);
+            group.rotation.y = o.yaw;
+        } else if (o.kind === 'table' || o.kind === 'desk') {
+            add(new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.35, 3.5), std(o.color)), 2.4);
+            const legGeo = new THREE.CylinderGeometry(0.15, 0.15, 2.4, 12);
+            const legMat = std(0x334155, { metalness: 0.8 });
+            [[-2.3, -1.4], [2.3, -1.4], [-2.3, 1.4], [2.3, 1.4]].forEach(([lx, lz]) => {
+                const leg = add(new THREE.Mesh(legGeo, legMat), 1.2); leg.position.x = lx; leg.position.z = lz;
+            });
+            if (o.kind === 'desk') {
+                const mon = add(new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.1, 0.12), std(0x0f172a, { roughness: 0.2 })), 3.25);
+                mon.position.z = -0.9;
+                const stand = add(new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.5, 0.15), std(0x334155)), 2.8);
+                stand.position.z = -0.9;
+            }
+            group.rotation.y = o.yaw;
+        } else {
+            add(new THREE.Mesh(new THREE.CylinderGeometry(o.r, o.r, 6.0, 24), std(o.color, { roughness: 0.6 })), 3.0);
+            [1.2, 2.6, 4.0].forEach(by => add(new THREE.Mesh(new THREE.CylinderGeometry(o.r + 0.03, o.r + 0.03, 0.45, 24), std(0x1f2937)), by));
+        }
+        group.position.set(o.x, 0, o.z);
+        return group;
+    }
+    function disposeTree(obj) {
+        obj.traverse(n => {
+            if (n.geometry) n.geometry.dispose();
+            if (n.material) (Array.isArray(n.material) ? n.material : [n.material]).forEach(m => m.dispose());
+        });
+    }
+
+    // =====================================================================
+    //  LIVE WORLD
+    // =====================================================================
+    let worldObjs = [];
+    let sim = null;
+    let smartSearch = true;         // K toggles: search near the target's usual neighbours first
+    let currentGoal = 'Red Barrel';
+
+    function buildWorld(seed) {
+        worldObjs.forEach(o => { scene.remove(o.mesh); scene.remove(o.helper); disposeTree(o.mesh); disposeTree(o.helper); });
+        const rng = mulberry32(seed);
+        worldObjs = generateWorld(rng, 0, 0);
+        worldObjs.forEach(o => {
+            o.mesh = createObjectMesh(o);
+            scene.add(o.mesh);
+            o.mesh.updateMatrixWorld(true);
+            o.box3 = new THREE.Box3().setFromObject(o.mesh);
+            o.helper = new THREE.Box3Helper(o.box3.clone().expandByScalar(0.3), 0x00b8d4);
+            o.helper.visible = false;
+            setLayerDeep(o.helper, 1);
+            scene.add(o.helper);
+        });
+        sim = new Sim(worldObjs, Object.assign({}, DEFAULT_PARAMS, { useContext: smartSearch }), seed);
+        resetTrail();
+        lastLogSeq = 0; logPanel.innerHTML = '';
+        sim.setGoal(currentGoal);
+        updateBeacons();
+        goalAnnounced = false;
+    }
+    function updateBeacons() {
+        const targets = worldObjs.filter(o => o.name === currentGoal);
+        while (beacons.length < targets.length) beacons.push(makeBeacon());
+        beacons.forEach((b, i) => {
+            b.visible = i < targets.length;
+            if (b.visible) b.position.set(targets[i].x, targets[i].kind === 'pillar' ? 2.2 : 0, targets[i].z);
+        });
+    }
+    function setGoal(name, sourceText) {
+        currentGoal = name;
+        goalSelect.value = name;
+        sim.setGoal(name);
+        updateBeacons();
+        goalAnnounced = false;
+        if (sourceText) {
+            showToast(`🧠 "${sourceText}" → goal: ${name}`);
+        } else {
+            showToast(`🎯 Target set: ${name}`);
+        }
+    }
+
+    // =====================================================================
+    //  UI WIRING
+    // =====================================================================
+    const statusBadge = document.getElementById('status-badge');
+    const statusText = document.getElementById('status-text');
+    const goalChip = document.getElementById('goal-chip');
+    const subText = document.getElementById('sub-text');
+    const timerChip = document.getElementById('timer-chip');
+    const speedChip = document.getElementById('speed-chip');
+    const valPos = document.getElementById('val-pos');
+    const valHeading = document.getElementById('val-heading');
+    const valSpeed = document.getElementById('val-speed');
+    const valDist = document.getElementById('val-dist');
+    const valExplored = document.getElementById('val-explored');
+    const valColl = document.getElementById('val-coll');
+    const valDetCount = document.getElementById('val-det-count');
+    const detectionsList = document.getElementById('detections-list');
+    const povDetectionTag = document.getElementById('pov-detection-tag');
+    const povFps = document.getElementById('pov-fps');
+    const toast = document.getElementById('toast');
+    const logPanel = document.getElementById('log-panel');
+    const goalSelect = document.getElementById('goal-select');
+    const nlInput = document.getElementById('nl-goal-input');
+
+    TARGET_NAMES.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = `${CATALOG[name].emoji} ${name}${CATALOG[name].unique ? '' : ' (any)'}`;
+        goalSelect.appendChild(opt);
+    });
+    goalSelect.value = currentGoal;
+
+    let toastTimer = null;
+    function showToast(msg, kind = '', ms = 2800) {
+        toast.textContent = msg;
+        toast.className = 'toast ' + kind;
+        void toast.offsetWidth;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), ms);
+    }
+
+    function executeNlGoal() {
+        const raw = nlInput.value.trim();
+        if (!raw) return;
+        const parsed = parseGoal(raw);
+        if (!parsed) {
+            showToast(`❓ I can't ground "${raw}" to anything in this warehouse. Try: red barrel, blue crate, table, desk, steel barrel, cargo box, pillar.`, 'warn', 5200);
+            return;
+        }
+        currentGoal = parsed.name;
+        goalSelect.value = parsed.name;
+        sim.setGoal(parsed.name);
+        updateBeacons();
+        goalAnnounced = false;
+        showToast(`🧠 "${raw}" → ${parsed.name}  (matched: ${parsed.hits.join(', ')})`, '', 3600);
+        nlInput.value = '';
+        nlInput.blur();
+    }
+    document.getElementById('btn-nl-submit').addEventListener('click', executeNlGoal);
+    nlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeNlGoal(); e.stopPropagation(); });
+    goalSelect.addEventListener('change', (e) => { setGoal(e.target.value); e.target.blur(); });
+
+    function rearm() {
+        buildWorld((Math.random() * 1e9) >>> 0);
+        showToast('🔄 New random warehouse — robot re-armed at the start');
+    }
+    document.getElementById('btn-reset').addEventListener('click', rearm);
+
+    let paused = false;
+    const btnPause = document.getElementById('btn-pause');
+    function togglePause() { paused = !paused; btnPause.textContent = paused ? '▶️ Resume' : '⏸️ Pause'; }
+    btnPause.addEventListener('click', togglePause);
+
+    const SPEEDS = [1, 2, 3, 5];
+    let speedIdx = 2;
+    const btnSpeed = document.getElementById('btn-speed');
+    function cycleSpeed() {
+        speedIdx = (speedIdx + 1) % SPEEDS.length;
+        btnSpeed.textContent = `⏩ ×${SPEEDS[speedIdx]}`;
+        speedChip.textContent = `sim ×${SPEEDS[speedIdx]}`;
+        showToast(`Simulation speed ×${SPEEDS[speedIdx]} (robot speeds shown in real m/s)`);
+    }
+    btnSpeed.addEventListener('click', cycleSpeed);
+
+    let camMode = 0;
+    const btnCam = document.getElementById('btn-cam');
+    const CAM_NAMES = ['Orbit', '3rd Person', 'Top-Down'];
+    function cycleCam() {
+        camMode = (camMode + 1) % 3;
+        btnCam.textContent = `🎥 Cam: ${CAM_NAMES[camMode]}`;
+        if (camMode === 0) {
+            controls.enabled = true;
+            camera.position.set(0, 68, 85);
+            controls.target.set(0, 0, 0);
+        } else if (camMode === 1) {
+            controls.enabled = false;
+        } else {
+            controls.enabled = false;
+            camera.position.set(0, 150, 0.01);
+            camera.lookAt(0, 0, 0);
+        }
+    }
+    btnCam.addEventListener('click', cycleCam);
+
+    let povVisible = true;
+    const povCard = document.getElementById('pov-card');
+    const btnTogglePov = document.getElementById('btn-toggle-pov');
+    function setPovVisibility(visible) {
+        povVisible = visible;
+        povCard.style.display = povVisible ? 'block' : 'none';
+        btnTogglePov.textContent = povVisible ? '📷 POV: ON' : '📷 POV: OFF';
+        if (povVisible) requestAnimationFrame(resizePov);
+    }
+    btnTogglePov.addEventListener('click', () => setPovVisibility(!povVisible));
+    document.getElementById('btn-close-pov').addEventListener('click', () => setPovVisibility(false));
+
+    document.addEventListener('keydown', (e) => {
+        const tag = (e.target && e.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+        if (benchModal.classList.contains('open') && e.key !== 'Escape') return;
+        const k = e.key.toLowerCase();
+        if (e.key === ' ') { e.preventDefault(); togglePause(); }
+        else if (k === 'c') cycleCam();
+        else if (k === 'v') setPovVisibility(!povVisible);
+        else if (k === 'r') rearm();
+        else if (k === 'f') cycleSpeed();
+        else if (k === 'b') openBench();
+        else if (k === 'k') toggleSmart();
+        else if (k === 'd') { if (demo.running) stopDemo('Demo stopped'); else runDemo(); }
+        else if (e.key === 'Escape') { if (demo.running) stopDemo('Demo stopped'); closeBench(); }
+        else if (e.key === '/') { e.preventDefault(); nlInput.focus(); }
+    });
+
+    function toggleSmart() {
+        smartSearch = !smartSearch;
+        sim.P.useContext = smartSearch;
+        sim.waypoint = null;
+        showToast(smartSearch ? '🧠 Smart search ON: looks near the target\'s usual neighbours first'
+                              : 'Smart search OFF: plain frontier exploration');
+    }
+
+    // ---------------- Guided demo (D): a repeatable sequence for recording the video ----------------
+    const captionEl = document.getElementById('caption');
+    const demo = { running: false, token: 0 };
+    function caption(text, sub) {
+        if (!text) { captionEl.classList.remove('show'); return; }
+        captionEl.innerHTML = text + (sub ? `<small>${sub}</small>` : '');
+        captionEl.classList.add('show');
+    }
+    function stopDemo(msg) {
+        demo.running = false; demo.token++;
+        caption(null);
+        if (msg) showToast(msg);
+    }
+    const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+    async function waitFor(cond, maxMs, tok) {
+        const t0 = performance.now();
+        while (!cond()) {
+            if (tok !== demo.token) throw new Error('cancelled');
+            if (performance.now() - t0 > maxMs) return false;
+            await sleep(150);
+        }
+        return true;
+    }
+    async function typeGoal(text, tok) {
+        nlInput.value = '';
+        for (const ch of text) {
+            if (tok !== demo.token) throw new Error('cancelled');
+            nlInput.value += ch; await sleep(60);
+        }
+        await sleep(350);
+        if (paused) togglePause();                            // the world waits, frozen, until the goal arrives
+        executeNlGoal();
+    }
+    const DEMO_SEED = 20261013;   // a short run (~30 s robot-time) that shows the smart-search hunch
+    async function runDemo() {
+        const tok = ++demo.token; demo.running = true;
+        try {
+            closeBench();
+            if (paused) togglePause();
+            if (!smartSearch) toggleSmart();
+            speedIdx = 1; cycleSpeed();                       // x3
+            buildWorld(DEMO_SEED);
+            togglePause();                                    // freeze until the goal is typed: same run every time
+            caption('SightSeeker: tell the robot what to find, in plain English', '120 m warehouse · 28 objects · robot camera + 360° LiDAR');
+            await sleep(3500);
+            caption('Goal: "find the red barrel"', 'The sentence is grounded to a detector class');
+            await typeGoal('find the red barrel', tok);
+            await sleep(2500);
+            caption('It doesn\'t know where the barrel is', '360° scan, then it explores the most promising unexplored area');
+            const sawContext = await waitFor(() => sim.missionDone || sim.logs.some(l => l.msg.startsWith('💡')), 60000, tok);
+            if (sawContext && !sim.missionDone) {
+                caption('💡 Smart search: steel barrels spotted', 'Red barrels are usually stored with them → it searches there first');
+            }
+            await waitFor(() => sim.missionDone || sim.state === 'NAVIGATING', 90000, tok);
+            if (!sim.missionDone) caption('🎯 Target spotted by the camera', 'Navigating · the safety layer keeps it clear of obstacles');
+            await waitFor(() => sim.missionDone, 120000, tok);
+            const r1 = sim.result;
+            caption(`✅ Goal reached in ${r1 ? r1.time.toFixed(0) : '?'} s · ${r1 ? r1.collisions : 0} collisions`, 'Everything it saw on the way is now on its semantic map');
+            await sleep(4500);
+            caption('New goal: "go to the yellow pillar"', 'If it has already seen one, it drives there from memory');
+            await typeGoal('go to the yellow pillar', tok);
+            await waitFor(() => sim.missionDone, 90000, tok);
+            const r2 = sim.result;
+            caption(`✅ Reached in ${r2 ? r2.time.toFixed(0) : '?'} s from its own map`, 'No second search needed');
+            await sleep(4500);
+            caption('Is it just a lucky run?', '50 brand-new random warehouses, each run with and without smart search');
+            await sleep(2500);
+            openBench();
+            const before = window.lastBenchmark;
+            benchRunBtn.click();
+            await waitFor(() => window.lastBenchmark && window.lastBenchmark !== before, 180000, tok);
+            const s = window.lastBenchmark.summary, c = window.lastBenchmark.compare;
+            caption(`${(s.successRate * 100).toFixed(0)}% missions completed · ${s.collisions} collisions`,
+                    c ? `Smart search median ${c.smart.toFixed(0)} s vs ${c.plain.toFixed(0)} s plain frontier search` : '');
+            await sleep(7000);
+            caption(null); demo.running = false;
+        } catch (e) {
+            if (e.message !== 'cancelled') { console.error(e); stopDemo('Demo stopped: ' + e.message); }
+        }
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        resizePov();
+    });
+
+    // ---------------- Benchmark modal ----------------
+    const benchModal = document.getElementById('bench-modal');
+    const benchBar = document.getElementById('bench-bar');
+    const benchStatus = document.getElementById('bench-status');
+    const benchResults = document.getElementById('bench-results');
+    const benchRunBtn = document.getElementById('bench-run');
+    let benchRunning = false, pausedBeforeBench = false;
+    function openBench() { benchModal.classList.add('open'); }
+    function closeBench() { if (!benchRunning) benchModal.classList.remove('open'); }
+    document.getElementById('btn-bench').addEventListener('click', openBench);
+    document.getElementById('bench-close').addEventListener('click', closeBench);
+    benchModal.addEventListener('click', (e) => { if (e.target === benchModal) closeBench(); });
+    benchRunBtn.addEventListener('click', () => {
+        if (benchRunning) return;
+        benchRunning = true; benchRunBtn.disabled = true;
+        pausedBeforeBench = paused; paused = true;
+        const N = 50, startSeed = (Math.random() * 1e6) >>> 0, results = [], plain = [];
+        benchResults.innerHTML = ''; benchBar.style.width = '0%';
+        const t0 = performance.now();
+        function chunk() {
+            const until = performance.now() + 40;
+            while (results.length < N && performance.now() < until) {
+                const i = results.length;
+                results.push(runTrial(startSeed + i, UNIQUE_NAMES[i % UNIQUE_NAMES.length]));
+                plain.push(runTrial(startSeed + i, UNIQUE_NAMES[i % UNIQUE_NAMES.length], 240, { useContext: false }));
+            }
+            benchBar.style.width = `${(results.length / N) * 100}%`;
+            const ok = results.filter(r => r.success).length;
+            benchStatus.textContent = `Trial ${results.length}/${N} · ${ok} successful so far`;
+            if (results.length < N) { setTimeout(chunk, 0); return; }
+            const s = summarize(results), sp = summarize(plain);
+            const compare = { smart: s.median, plain: sp.median, plainSuccess: sp.successRate };
+            window.lastBenchmark = { results, summary: s, plain: sp, compare };
+            benchStatus.textContent = `Done: ${N} randomized warehouses in ${((performance.now() - t0) / 1000).toFixed(1)} s of compute.`;
+            const rows = Object.entries(s.byGoal).map(([g, v]) => {
+                const tt = v.t.sort((a, b) => a - b); const med = tt.length ? tt[Math.floor((tt.length - 1) / 2)] : NaN;
+                return `<tr><td>${CATALOG[g].emoji} ${g}</td><td>${v.ok}/${v.n}</td><td>${isNaN(med) ? '—' : med.toFixed(1) + ' s'}</td></tr>`;
+            }).join('');
+            benchResults.innerHTML = `
+                <div class="bench-grid">
+                    <div class="bench-cell"><div class="v" style="color:#059669">${(s.successRate * 100).toFixed(0)}%</div><div class="l">Missions completed</div></div>
+                    <div class="bench-cell"><div class="v">${s.median.toFixed(1)} s</div><div class="l">Median time to goal</div></div>
+                    <div class="bench-cell"><div class="v">${s.p90.toFixed(1)} s</div><div class="l">90th percentile</div></div>
+                    <div class="bench-cell"><div class="v" style="color:${s.collisions ? '#dc2626' : '#059669'}">${s.collisions}</div><div class="l">Collisions (all trials)</div></div>
+                    <div class="bench-cell"><div class="v">${s.meanPath.toFixed(0)} m</div><div class="l">Avg path length</div></div>
+                    <div class="bench-cell"><div class="v">${s.recoveries}</div><div class="l">Stuck recoveries</div></div>
+                </div>
+                <div class="compare">🧠 Smart search vs plain frontier search, same ${N} warehouses:
+                    median ${s.median.toFixed(1)} s vs ${sp.median.toFixed(1)} s
+                    (${sp.median > s.median ? ((1 - s.median / sp.median) * 100).toFixed(0) + '% faster' : 'no faster this time'})
+                    · success ${(s.successRate * 100).toFixed(0)}% vs ${(sp.successRate * 100).toFixed(0)}%</div>
+                <table class="bench-table"><tr><th>Target</th><th>Found</th><th>Median time</th></tr>${rows}</table>`;
+            benchRunning = false; benchRunBtn.disabled = false;
+            paused = pausedBeforeBench;
+        }
+        setTimeout(chunk, 30);
+    });
+
+    // =====================================================================
+    //  HUD + MINIMAP + POV BOXES
+    // =====================================================================
+    let lastLogSeq = 0, goalAnnounced = false;
+    function renderLog() {
+        if (!sim.logs.length || sim.logs[sim.logs.length - 1].seq === lastLogSeq) return;
+        lastLogSeq = sim.logs[sim.logs.length - 1].seq;
+        const lines = sim.logs.slice(-5);
+        logPanel.innerHTML = '<div class="log-title">🧠 Decision log</div>' + lines.map((l, i) =>
+            `<div class="log-line ${l.kind}" style="opacity:${0.55 + 0.45 * (i + 1) / lines.length}"><span class="t">${l.t.toFixed(1)}s</span>${l.msg}</div>`
+        ).join('');
+    }
+
+    const STATE_UI = {
+        SEARCHING: ['status-searching', 'SEARCHING'],
+        NAVIGATING: ['status-navigating', 'NAVIGATING TO GOAL'],
+        AVOIDING: ['status-avoiding', 'OBSTACLE AVOIDANCE'],
+        GOAL_REACHED: ['status-goal', 'GOAL REACHED'],
+        IDLE: ['status-idle', 'IDLE'],
+    };
+    let lastStateShown = '';
+    function updateHUD() {
+        const r = sim.robot;
+        if (sim.state !== lastStateShown) {
+            const [cls, txt] = STATE_UI[sim.state] || STATE_UI.IDLE;
+            statusBadge.className = 'badge-status ' + cls;
+            statusText.textContent = txt;
+            lastStateShown = sim.state;
+        }
+        goalChip.textContent = `${CATALOG[currentGoal].emoji} Goal: ${currentGoal}`;
+        subText.textContent = sim.sub || '—';
+        const mt = sim.missionDone ? sim.result.time : (sim.t - sim.missionStart);
+        timerChip.textContent = `⏱ ${mt.toFixed(1)} s`;
+
+        valPos.textContent = `${r.x.toFixed(1)}, ${r.z.toFixed(1)}`;
+        let deg = (-r.a / DEG) % 360; if (deg < 0) deg += 360;
+        valHeading.textContent = `${deg.toFixed(0)}°`;
+        valSpeed.textContent = `${Math.abs(r.v).toFixed(1)} m/s`;
+        const tgt = sim.bestKnownTarget();
+        if (tgt) {
+            const d = Math.hypot(tgt.x - r.x, tgt.z - r.z);
+            valDist.textContent = `${d.toFixed(1)} m`;
+            valDist.className = 'stat-value good';
+        } else {
+            valDist.textContent = 'not seen';
+            valDist.className = 'stat-value';
+        }
+        valExplored.textContent = `${Math.round((sim.covCount / (GN * GN)) * 100)}%`;
+        valColl.textContent = `${sim.collisions}`;
+        valColl.className = 'stat-value ' + (sim.collisions ? 'bad' : 'good');
+
+        const dets = sim.detections;
+        valDetCount.textContent = `${dets.length} visible`;
+        if (!dets.length) {
+            detectionsList.innerHTML = '<div class="detection-item empty">No objects in view</div>';
+            povDetectionTag.textContent = sim.state === 'GOAL_REACHED' ? 'MISSION COMPLETE' : 'NO OBJECTS IN VIEW';
+            povDetectionTag.style.color = '#00ffcc';
+        } else {
+            detectionsList.innerHTML = dets.map(d => {
+                const k = sim.known.get(d.idx);
+                const dist = k ? Math.hypot(k.x - r.x, k.z - r.z) : d.d;
+                return `<div class="detection-item ${d.isGoal ? 'target' : ''}"><span>${d.isGoal ? '🎯 ' : ''}${d.name} · ${dist.toFixed(1)}m</span><span class="confidence-badge">${Math.round(d.conf * 100)}%</span></div>`;
+            }).join('');
+            const g = dets.find(d => d.isGoal);
+            if (g) {
+                povDetectionTag.textContent = `TARGET LOCKED: ${g.name.toUpperCase()} [${Math.round(g.conf * 100)}%]`;
+                povDetectionTag.style.color = '#00ff66';
+            } else {
+                povDetectionTag.textContent = `${dets.length} OBJECT(S) DETECTED · TARGET NOT IN VIEW`;
+                povDetectionTag.style.color = '#00ffff';
+            }
+        }
+        renderLog();
+        if (sim.missionDone && !goalAnnounced) {
+            goalAnnounced = true;
+            showToast(`🎉 Goal reached: ${currentGoal} in ${sim.result.time.toFixed(1)} s · ${sim.result.collisions} collisions — type a new prompt!`, 'goal', 5000);
+        }
+    }
+
+    const mm = document.getElementById('minimap');
+    const mmCtx = mm.getContext('2d');
+    function drawMinimap() {
+        const S = mm.clientWidth, dpr = Math.min(window.devicePixelRatio || 1, 2);
+        if (mm.width !== Math.round(S * dpr)) { mm.width = Math.round(S * dpr); mm.height = Math.round(S * dpr); }
+        const ctx = mmCtx;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const sc = S / ARENA_SIZE;
+        const px = (x) => (x + HALF) * sc, pz = (z) => (z + HALF) * sc;
+        ctx.fillStyle = '#dfe5ee'; ctx.fillRect(0, 0, S, S);
+        ctx.fillStyle = '#ffffff';
+        for (let i = 0; i < GN; i++) for (let j = 0; j < GN; j++) if (sim.cov[i * GN + j]) ctx.fillRect(i * GC * sc, j * GC * sc, GC * sc + 0.6, GC * sc + 0.6);
+        ctx.fillStyle = '#334155';
+        for (let i = 0; i < ON; i++) for (let k = 0; k < ON; k++) if (sim.occ[i * ON + k]) ctx.fillRect(i * OC * sc, k * OC * sc, OC * sc + 0.3, OC * sc + 0.3);
+        // camera wedge
+        const r = sim.robot;
+        ctx.fillStyle = 'rgba(0,142,184,0.18)';
+        ctx.beginPath(); ctx.moveTo(px(r.x), pz(r.z));
+        for (let s = -1; s <= 1.0001; s += 0.25) {
+            const a = r.a + s * DEFAULT_PARAMS.camHalfFov;
+            ctx.lineTo(px(r.x - Math.sin(a) * DEFAULT_PARAMS.covRange), pz(r.z - Math.cos(a) * DEFAULT_PARAMS.covRange));
+        }
+        ctx.closePath(); ctx.fill();
+        // trail
+        if (trailCount > 1) {
+            ctx.strokeStyle = 'rgba(0,142,184,0.7)'; ctx.lineWidth = 1; ctx.beginPath();
+            for (let i = 0; i < trailCount; i++) { const x = px(trailPos[i * 3]), y = pz(trailPos[i * 3 + 2]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+            ctx.stroke();
+        }
+        // semantic map
+        for (const k of sim.known.values()) {
+            ctx.fillStyle = hexCss(CATALOG[k.name].color);
+            ctx.beginPath(); ctx.arc(px(k.x), pz(k.z), 2.6, 0, TAU); ctx.fill();
+            if (k.name === currentGoal) {
+                ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(px(k.x), pz(k.z), 6, 0, TAU); ctx.stroke();
+            }
+        }
+        // waypoint
+        if (sim.waypoint && !sim.missionDone && !sim.bestKnownTarget()) {
+            const x = px(sim.waypoint.x), y = pz(sim.waypoint.z);
+            ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x - 4, y - 4); ctx.lineTo(x + 4, y + 4); ctx.moveTo(x + 4, y - 4); ctx.lineTo(x - 4, y + 4); ctx.stroke();
+        }
+        // robot
+        ctx.save(); ctx.translate(px(r.x), pz(r.z)); ctx.rotate(-r.a);
+        ctx.fillStyle = '#008eb8'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(4.5, 4.5); ctx.lineTo(-4.5, 4.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.restore();
+    }
+
+    const povBoxes = document.getElementById('pov-boxes');
+    const pctx = povBoxes.getContext('2d');
+    const tmpV = new THREE.Vector3();
+    function drawPovBoxes() {
+        const w = povBoxes.clientWidth, h = povBoxes.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+        if (povBoxes.width !== Math.round(w * dpr) || povBoxes.height !== Math.round(h * dpr)) {
+            povBoxes.width = Math.round(w * dpr); povBoxes.height = Math.round(h * dpr);
+        }
+        pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        pctx.clearRect(0, 0, w, h);
+        pctx.font = '700 10px Consolas, monospace';
+        for (const det of sim.detections) {
+            const o = worldObjs[det.idx];
+            const b = o.box3;
+            // Screen-space box of the object's silhouette: a camera-facing rectangle through the object's
+            // axis (width = 2r, height = object height). Robust even when the object fills the view.
+            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0;
+            for (const yy of [b.min.y, b.max.y]) {
+                tmpV.set(o.x, yy, o.z).applyMatrix4(povCamera.matrixWorldInverse);
+                if (tmpV.z > -0.6) continue;
+                const cz = tmpV.z, cy = tmpV.y, cx = tmpV.x;
+                for (const sx0 of [-o.r, o.r]) {
+                    tmpV.set(cx + sx0, cy, cz).applyMatrix4(povCamera.projectionMatrix);
+                    const sx = (tmpV.x * 0.5 + 0.5) * w, sy = (-tmpV.y * 0.5 + 0.5) * h;
+                    x0 = Math.min(x0, sx); y0 = Math.min(y0, sy); x1 = Math.max(x1, sx); y1 = Math.max(y1, sy); n++;
+                }
+            }
+            if (n < 4) continue;
+            x0 = clamp(x0, 1, w - 1); x1 = clamp(x1, 1, w - 1); y0 = clamp(y0, 1, h - 1); y1 = clamp(y1, 1, h - 1);
+            if (x1 - x0 < 4 || y1 - y0 < 4) continue;
+            const col = det.isGoal ? '#00ff66' : hexCss(CATALOG[o.name].color);
+            pctx.strokeStyle = col; pctx.lineWidth = det.isGoal ? 2.5 : 1.6;
+            pctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+            const label = `${det.isGoal ? 'TARGET ' : ''}${CATALOG[o.name].label} ${det.conf.toFixed(2)}`;
+            const tw = pctx.measureText(label).width + 6;
+            const ly = y0 > 13 ? y0 - 13 : y0;
+            const lx = Math.max(0, Math.min(x0, w - tw));
+            pctx.fillStyle = col; pctx.fillRect(lx, ly, tw, 13);
+            pctx.fillStyle = det.isGoal ? '#002b12' : '#ffffff';
+            pctx.fillText(label, lx + 3, ly + 10);
+        }
+    }
+
+    // =====================================================================
+    //  SCENE SYNC + ANIMATION LOOP
+    // =====================================================================
+    const STATE_COLOR = { AVOIDING: 0xe53935, GOAL_REACHED: 0x10b981, NAVIGATING: 0x10b981, SEARCHING: 0x008eb8, IDLE: 0x008eb8 };
+    const tmpDir = new THREE.Vector3();
+    function syncScene(frameDt) {
+        const r = sim.robot;
+        robotGroup.position.set(r.x, 0, r.z);
+        robotGroup.rotation.y = r.a;
+        wheels.forEach(w => w.rotation.x -= (r.v * frameDt * SPEEDS[speedIdx] * (paused ? 0 : 1)) / 0.5);
+        lidarHead.rotation.y += paused ? 0 : 0.15;
+        const sc = STATE_COLOR[sim.state] || 0x008eb8;
+        fanMat.color.setHex(sc); frustumMat.color.setHex(sc);
+        scanRing.scale.setScalar(1 + 0.15 * Math.sin(performance.now() * 0.006));
+
+        // LiDAR rays
+        for (let j = 0; j < NR; j++) {
+            const d = sim.lidar[j];
+            const o = j * 6;
+            rayPos[o] = r.x; rayPos[o + 1] = 0.6; rayPos[o + 2] = r.z;
+            rayPos[o + 3] = r.x + RAY_DX[j] * d; rayPos[o + 4] = 0.6; rayPos[o + 5] = r.z + RAY_DZ[j] * d;
+            const near = clamp(1 - d / DEFAULT_PARAMS.lidarRange, 0, 1);
+            const cr = 0.1 + 0.85 * near, cg = 0.75 - 0.55 * near, cb = 0.55 - 0.4 * near;
+            rayCol[o] = cr; rayCol[o + 1] = cg; rayCol[o + 2] = cb;
+            rayCol[o + 3] = cr; rayCol[o + 4] = cg; rayCol[o + 5] = cb;
+        }
+        rayGeo.attributes.position.needsUpdate = true;
+        rayGeo.attributes.color.needsUpdate = true;
+
+        // Planner arrow
+        planArrow.visible = sim.planning && !sim.missionDone;
+        if (planArrow.visible) {
+            planArrow.position.set(r.x, 0.35, r.z);
+            planArrow.setDirection(tmpDir.set(-Math.sin(sim.planDir), 0, -Math.cos(sim.planDir)));
+        }
+
+        // Waypoint
+        const tgtKnown = !!sim.bestKnownTarget();
+        wpGroup.visible = !!sim.waypoint && !sim.missionDone && !tgtKnown;
+        if (wpGroup.visible) wpGroup.position.set(sim.waypoint.x, 0, sim.waypoint.z);
+
+        // Detection boxes in the 3D view
+        const seen = new Set(sim.detections.map(d => d.idx));
+        worldObjs.forEach(o => {
+            o.helper.visible = seen.has(o.idx);
+            if (o.helper.visible) o.helper.material.color.setHex(o.name === currentGoal ? 0x10b981 : 0x00b8d4);
+        });
+
+        // Beacons
+        const pulse = 1 + Math.sin(performance.now() * 0.005) * 0.2;
+        beacons.forEach(b => { if (b.visible) { b.userData.ring.scale.setScalar(pulse); b.userData.pin.rotation.y += 0.03; } });
+
+        pushTrail(r.x, r.z);
+
+        // Robot camera pose (slightly ahead of the lens so it never sees its own body)
+        const fxv = -Math.sin(r.a), fzv = -Math.cos(r.a);
+        povCamera.position.set(r.x + fxv * 1.95, 1.3, r.z + fzv * 1.95);
+        povCamera.lookAt(r.x + fxv * 12, 1.0, r.z + fzv * 12);
+    }
+
+    const DT = 1 / 60;
+    let acc = 0, lastNow = performance.now(), hudTimer = 0, mapTimer = 0, fpsEMA = 60;
+    function animate(now) {
+        requestAnimationFrame(animate);
+        const frameDt = Math.min(0.1, Math.max(0, (now - lastNow) / 1000));
+        lastNow = now;
+        if (frameDt > 0) fpsEMA = fpsEMA * 0.95 + (1 / frameDt) * 0.05;
+        if (!paused) {
+            acc += frameDt * SPEEDS[speedIdx];
+            let n = 0;
+            while (acc >= DT && n < 30) { sim.step(DT); acc -= DT; n++; }
+            if (n >= 30) acc = 0;
+        }
+        syncScene(frameDt);
+
+        if (camMode === 0) {
+            controls.update();
+        } else if (camMode === 1) {
+            const r = sim.robot;
+            const camX = r.x + Math.sin(r.a) * 11, camZ = r.z + Math.cos(r.a) * 11;
+            camera.position.lerp(tmpDir.set(camX, 6.5, camZ), 0.08);
+            camera.lookAt(r.x, 1.2, r.z);
+        }
+        renderer.render(scene, camera);
+        if (povVisible) {
+            povRenderer.render(scene, povCamera);
+            drawPovBoxes();
+        }
+        hudTimer += frameDt; mapTimer += frameDt;
+        if (hudTimer > 0.1) { hudTimer = 0; updateHUD(); povFps.textContent = Math.round(fpsEMA); }
+        if (mapTimer > 0.15) { mapTimer = 0; drawMinimap(); }
+    }
+
+    // Debug / testing hooks
+    window.SightSeeker = { get sim() { return sim; }, parseGoal, runTrial, runBenchmarkSync, setGoal, rearm, debugTrial, debugSim, runDemo, stopDemo, get demo() { return demo; } };
+
+    buildWorld((Math.random() * 1e9) >>> 0);
+    requestAnimationFrame((t) => { lastNow = t; animate(t); });
+
+    // Embedded in the pitch deck: "#demo" starts the guided demo, and slide keys go back to the deck
+    if (location.hash === '#demo') setTimeout(runDemo, 900);
+    window.addEventListener('hashchange', () => { if (location.hash === '#demo' && !demo.running) runDemo(); });
+    if (window.parent !== window) {
+        document.addEventListener('keydown', (e) => {
+            const tag = (e.target && e.target.tagName) || '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+            if (['ArrowRight', 'ArrowLeft', 'PageDown', 'PageUp'].includes(e.key)) {
+                try { window.parent.postMessage({ type: 'sightseeker-key', key: e.key }, '*'); } catch (err) { /* ignore */ }
+            }
+        });
+    }
+    </script>
+</body>
+</html>
