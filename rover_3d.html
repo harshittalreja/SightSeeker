@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SightSeeker Rover Twin</title>
+<!-- Offline: keep three.min.js and OrbitControls.js next to this file -->
+<script src="three.min.js"></script>
+<script src="OrbitControls.js"></script>
+<style>
+  :root { --ink:#0d1220; --panel:rgba(14,20,36,.88); --line:#2a3655; --snow:#eef3fb; --mist:#9aa8c4;
+          --amber:#ffb547; --red:#ff5468; --teal:#3ee0c5; --green:#5bd67a; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:var(--ink); color:var(--snow);
+               font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+  #view { position:fixed; inset:0; }
+  .mono { font-family: Consolas, 'Cascadia Mono', 'JetBrains Mono', monospace; }
+  #title { position:fixed; left:16px; top:14px; pointer-events:none; }
+  #title h1 { margin:0; font-size:22px; letter-spacing:.02em; }
+  #title h1 span { color:var(--amber); }
+  #title p { margin:4px 0 0; color:var(--mist); font-size:13px; }
+  #pov { position:fixed; left:16px; top:72px; width:320px; height:180px; border:1.5px solid var(--line);
+         border-radius:6px; pointer-events:none; }
+  #pov-label { position:fixed; left:22px; top:76px; font-size:11px; letter-spacing:.12em; color:var(--snow);
+               background:rgba(0,0,0,.55); padding:2px 6px; border-radius:3px; pointer-events:none; }
+  #pov-boxes { position:fixed; left:16px; top:72px; width:320px; height:180px; pointer-events:none; }
+  #panel { position:fixed; right:14px; top:14px; width:330px; max-height:calc(100% - 28px); overflow:auto;
+           background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px 16px; }
+  .k { font-size:11px; letter-spacing:.14em; color:var(--mist); text-transform:uppercase; margin-top:12px; }
+  .k:first-child { margin-top:0; }
+  .big { font-size:20px; font-weight:600; margin-top:3px; }
+  #mode-row { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
+  #mode-row button { flex:1; min-width:80px; background:#18223d; color:var(--snow); border:1px solid var(--line);
+                     border-radius:5px; padding:6px 4px; font-size:12px; cursor:pointer; }
+  #mode-row button.on { border-color:var(--amber); color:var(--amber); }
+  #mode-row button:focus-visible { outline:2px solid var(--amber); }
+  .bar { display:grid; grid-template-columns:46px 1fr 48px; gap:8px; align-items:center; font-size:13px; margin-top:6px; }
+  .track { position:relative; height:10px; background:#0a0f1d; border:1px solid var(--line); border-radius:5px; }
+  .track::after { content:''; position:absolute; left:50%; top:-3px; bottom:-3px; width:1px; background:var(--line); }
+  .fill { position:absolute; top:1px; bottom:1px; border-radius:4px; background:var(--green); }
+  .val { text-align:right; font-variant-numeric:tabular-nums; }
+  #pins { display:grid; grid-template-columns:repeat(6, 1fr); gap:4px; margin-top:6px; text-align:center; font-size:10px; color:var(--mist); }
+  .led { width:14px; height:14px; border-radius:50%; margin:0 auto 3px; background:#26304a; transition:background .08s, box-shadow .08s; }
+  #serial { font-size:15px; margin-top:4px; color:var(--snow); }
+  #state { display:inline-block; padding:3px 10px; border-radius:4px; border:1.5px solid currentColor; font-size:13px; font-weight:600; margin-top:5px; }
+  #log { font-size:11.5px; line-height:1.45; color:var(--mist); margin-top:4px; height:118px; overflow:hidden; }
+  #log b { color:var(--snow); font-weight:600; }
+  #help { position:fixed; left:16px; bottom:14px; font-size:12px; color:var(--mist); background:rgba(14,20,36,.75);
+          padding:7px 10px; border-radius:6px; border:1px solid var(--line); max-width:calc(100% - 380px); }
+  #help b { color:var(--snow); }
+  #banner { position:fixed; left:50%; top:18px; transform:translateX(-50%); background:rgba(14,40,32,.92);
+            border:1.5px solid var(--teal); color:var(--snow); padding:10px 18px; border-radius:8px; font-size:16px;
+            opacity:0; transition:opacity .4s; pointer-events:none; white-space:nowrap; }
+  #banner.show { opacity:1; }
+  .lab { position:fixed; transform:translate(-50%, -100%); background:rgba(10,15,30,.9); border:1px solid var(--amber);
+         color:var(--snow); font-size:12px; padding:3px 7px; border-radius:4px; white-space:nowrap; pointer-events:none; }
+  .lab small { display:block; color:var(--mist); font-size:10.5px; }
+  @media (max-width: 900px) { #panel { width:260px; } #pov, #pov-boxes { width:220px; height:124px; } #help { display:none; } }
+</style>
+</head>
+<body>
+<div id="view"></div>
+<div id="pov" aria-hidden="true"></div>
+<div id="title"><h1>Sight<span>Seeker</span> Rover Twin</h1>
+  <p>The 2WD rover in 3D, running the same firmware logic and wheel commands as the real Arduino</p></div>
+<canvas id="pov-boxes"></canvas>
+<div id="pov-label">PHONE CAMERA (ROBOT'S EYE)</div>
+<div id="banner"></div>
+<svg id="leaders" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none"></svg>
+<div id="labels"></div>
+<div id="panel">
+  <div class="k">Mode</div>
+  <div id="mode-row">
+    <button id="m-auto" type="button">1 · Find bottle</button>
+    <button id="m-demo" type="button">2 · Wokwi demo</button>
+    <button id="m-man" type="button">3 · Drive</button>
+  </div>
+  <div class="k">Vision Brain decision</div>
+  <div id="state">SEARCHING</div>
+  <div class="big" id="cmd">ROTATE RIGHT</div>
+  <div class="k">Serial line to the Arduino (20 / s)</div>
+  <div class="mono" id="serial">-</div>
+  <div class="k">Wheels (PWM -255..255)</div>
+  <div class="bar"><span>LEFT</span><div class="track"><div class="fill" id="fl"></div></div><span class="val mono" id="vl">0</span></div>
+  <div class="bar"><span>RIGHT</span><div class="track"><div class="fill" id="fr"></div></div><span class="val mono" id="vr">0</span></div>
+  <div class="k">L298N input pins</div>
+  <div id="pins">
+    <div><div class="led" id="p-in1"></div>IN1</div><div><div class="led" id="p-in2"></div>IN2</div><div><div class="led" id="p-ena"></div>ENA</div>
+    <div><div class="led" id="p-in3"></div>IN3</div><div><div class="led" id="p-in4"></div>IN4</div><div><div class="led" id="p-enb"></div>ENB</div>
+  </div>
+  <div class="k">HC-SR04 distance · firmware safety</div>
+  <div class="big mono" id="dist">-</div>
+  <div id="safety" style="font-size:13px;margin-top:2px">OK</div>
+  <div class="k">Mission</div>
+  <div style="font-size:13px" class="mono" id="mission">t = 0.0 s · bumps 0</div>
+  <div class="k">Firmware serial monitor</div>
+  <div id="log" class="mono"></div>
+</div>
+<div id="help"><b>1</b> find the bottle · <b>2</b> Wokwi demo replay · <b>3</b> drive with arrow keys ·
+  <b>E</b> exploded parts view · <b>C</b> camera (chase / orbit / top) · <b>N</b> new room · <b>Space</b> pause · drag to orbit</div>
+
+<script>
+(() => {
+'use strict';
+// ------------------------------------------------------------------ scene
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1220);
+scene.fog = new THREE.Fog(0x0d1220, 7, 16);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.02, 60);
+camera.position.set(-0.55, 0.55, -2.55);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.target.set(0, 0.05, 0); controls.maxPolarAngle = Math.PI * 0.48;
+controls.minDistance = 0.35; controls.maxDistance = 9;
+scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x1a2030, 0.5));
+const sun = new THREE.DirectionalLight(0xfff4e6, 0.7);
+sun.position.set(2.5, 5, 1.5); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 0.5, far: 15 });
+scene.add(sun);
+
+// floor (tiles drawn on a canvas)
+const ROOM = 5.0;
+(function floor() {
+  const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d');
+  g.fillStyle = '#8f877a'; g.fillRect(0, 0, 512, 512);
+  g.strokeStyle = 'rgba(40,34,28,.35)'; g.lineWidth = 3;
+  for (let i = 0; i <= 512; i += 128) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 512); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(512, i); g.stroke(); }
+  const tex = new THREE.CanvasTexture(c); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(ROOM / 1.2, ROOM / 1.2);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }));
+  m.rotation.x = -Math.PI / 2; m.receiveShadow = true; scene.add(m);
+})();
+const solids = [];      // things the ultrasonic and the camera can hit
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x8d96a8, roughness: 0.8 });
+for (const [x, z, w, d] of [[0, ROOM / 2, ROOM, 0.06], [0, -ROOM / 2, ROOM, 0.06], [ROOM / 2, 0, 0.06, ROOM], [-ROOM / 2, 0, 0.06, ROOM]]) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.35, d), wallMat); m.position.set(x, 0.175, z);
+  m.castShadow = m.receiveShadow = true; m.userData = { kind: 'wall', name: 'wall', aabb: [x - w / 2, z - d / 2, x + w / 2, z + d / 2] };
+  scene.add(m); solids.push(m);
+}
+
+// ------------------------------------------------------------------ the rover (dimensions in metres, like the real kit)
+const TRACK = 0.16, WHEEL_R = 0.033;
+const rover = new THREE.Group(); scene.add(rover);
+const parts = [];        // {mesh, base: Vector3, lift, label, sub}
+function part(mesh, label, sub, lift) {
+  mesh.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  rover.add(mesh); parts.push({ mesh, base: mesh.position.clone(), lift, label, sub }); return mesh;
+}
+const M = (color, extra) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.55, metalness: 0.05 }, extra || {}));
+// acrylic chassis (two decks)
+const acrylic = M(0x9fd3ff, { transparent: true, opacity: 0.55, roughness: 0.2 });
+const deck1 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.004, 0.21), acrylic); deck1.position.set(0, 0.045, 0);
+part(deck1, '2WD acrylic chassis', '21 x 14 cm, two decks', 0);
+const deck2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.004, 0.17), acrylic); deck2.position.set(0, 0.085, -0.01);
+part(deck2, 'Upper deck', 'holds the electronics', 0.12);
+for (const [x, z] of [[-0.06, 0.06], [0.06, 0.06], [-0.06, -0.08], [0.06, -0.08]]) {
+  const s = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.04, 8), M(0xcfd6e0, { metalness: 0.8 }));
+  s.position.set(x, 0.065, z); rover.add(s);
+}
+// BO motors + wheels
+const wheels = [];
+for (const side of [1, -1]) {
+  const motor = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.022, 0.07), M(0xf2c230)); motor.add(body);
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.02, 16), M(0xc9ccd2, { metalness: 0.7 }));
+  can.rotation.x = Math.PI / 2; can.position.set(0, 0, -0.045); motor.add(can);
+  motor.position.set(side * 0.042, 0.033, 0.02);
+  part(motor, side > 0 ? 'Left BO motor' : 'Right BO motor', '3-6 V geared DC, ~200 rpm', 0.0);
+  const wheel = new THREE.Group();
+  const tyre = new THREE.Mesh(new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, 0.026, 28), M(0x1d1f24, { roughness: 0.9 }));
+  tyre.rotation.z = Math.PI / 2; wheel.add(tyre);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.028, 6), M(0xf2c230)); hub.rotation.z = Math.PI / 2; wheel.add(hub);
+  const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.004, 0.034), M(0x333333)); wheel.add(spoke);   // shows rotation
+  wheel.position.set(side * (TRACK / 2), WHEEL_R, 0.02);
+  part(wheel, side > 0 ? 'Left wheel' : 'Right wheel', '65 mm, driven by OUT1/OUT2' .replace('OUT1/OUT2', side > 0 ? 'OUT1/OUT2' : 'OUT3/OUT4'), 0);
+  wheels.push(wheel);
+}
+// caster
+const caster = new THREE.Group();
+const ball = new THREE.Mesh(new THREE.SphereGeometry(0.012, 16, 12), M(0xd8dde5, { metalness: 0.8, roughness: 0.25 })); ball.position.y = 0.012; caster.add(ball);
+const cpost = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.03, 10), M(0x777777)); cpost.position.y = 0.03; caster.add(cpost);
+caster.position.set(0, 0, -0.085); rover.add(caster);
+// battery pack 6xAA
+const batt = new THREE.Group();
+const holder = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.017, 0.085), M(0x161616)); batt.add(holder);
+for (let i = 0; i < 3; i++) { const cell = new THREE.Mesh(new THREE.CylinderGeometry(0.0072, 0.0072, 0.05, 12), M(0x3a8be0, { metalness: 0.4 }));
+  cell.rotation.x = Math.PI / 2; cell.position.set(-0.018 + i * 0.018, 0.009, 0); batt.add(cell); }
+batt.position.set(0, 0.057, -0.035);
+part(batt, '6 x AA battery (9 V)', 'motor supply via the L298N', 0.05);
+// L298N (red board + black heatsink)
+const l298 = new THREE.Group();
+const lpcb = new THREE.Mesh(new THREE.BoxGeometry(0.043, 0.003, 0.043), M(0xc7262c)); l298.add(lpcb);
+const sink = new THREE.Mesh(new THREE.BoxGeometry(0.023, 0.025, 0.016), M(0x111111, { metalness: 0.6 })); sink.position.set(0, 0.014, -0.008); l298.add(sink);
+for (let i = 0; i < 6; i++) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.002, 0.026, 0.017), M(0x222222, { metalness: 0.6 })); fin.position.set(-0.01 + i * 0.004, 0.014, -0.008); l298.add(fin); }
+const term = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.01, 0.008), M(0x2b6fd6)); term.position.set(0, 0.006, 0.018); l298.add(term);
+l298.position.set(-0.035, 0.09, -0.04);
+part(l298, 'L298N motor driver', 'IN1-IN4 direction, ENA/ENB PWM speed', 0.22);
+// Arduino Uno (blue board)
+const uno = new THREE.Group();
+const upcb = new THREE.Mesh(new THREE.BoxGeometry(0.053, 0.0025, 0.069), M(0x0e6aa8)); uno.add(upcb);
+const chip = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.004, 0.035), M(0x111111)); chip.position.set(0.012, 0.003, -0.008); uno.add(chip);
+const usb = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.011, 0.016), M(0xb8bdc6, { metalness: 0.8 })); usb.position.set(-0.016, 0.006, 0.03); uno.add(usb);
+const hdr = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.008, 0.05), M(0x111111)); hdr.position.set(0.024, 0.005, 0); uno.add(hdr);
+uno.position.set(0.03, 0.09, -0.03);
+part(uno, 'Arduino Uno / Nano', 'runs the firmware: watchdog + 25 cm stop', 0.3);
+// HC-05 Bluetooth
+const bt = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.004, 0.035), M(0x1e8a5a)); bt.position.set(-0.045, 0.089, 0.04);
+part(bt, 'HC-05 Bluetooth', 'wireless serial link, ~10 m', 0.26);
+// HC-SR04 at the front
+const sonar = new THREE.Group();
+const spcb = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.02, 0.002), M(0x1452a0)); sonar.add(spcb);
+for (const sx of [-0.013, 0.013]) { const eye = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.012, 20), M(0xd5d9e0, { metalness: 0.7 }));
+  eye.rotation.x = Math.PI / 2; eye.position.set(sx, 0, 0.007); sonar.add(eye); }
+sonar.position.set(0, 0.06, 0.112);
+part(sonar, 'HC-SR04 ultrasonic', 'blocks forward motion under 25 cm', 0.14);
+// phone camera on a mount
+const phone = new THREE.Group();
+const mount = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.06, 0.012), M(0x333333)); mount.position.y = 0.03; phone.add(mount);
+const body = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.15, 0.008), M(0x22252b, { metalness: 0.3 })); body.position.y = 0.13; phone.add(body);
+const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.004, 16), M(0x050505)); lens.rotation.x = Math.PI / 2; lens.position.set(-0.022, 0.185, 0.006); phone.add(lens);
+phone.position.set(0, 0.087, 0.07);
+part(phone, 'Phone camera', 'the robot\'s eye: DroidCam / IP Webcam -> laptop YOLO26', 0.36);
+// front marker arrow on the deck
+const nose = new THREE.Mesh(new THREE.ConeGeometry(0.01, 0.03, 3), M(0xffb547)); nose.rotation.x = Math.PI / 2; nose.position.set(0, 0.05, 0.095); rover.add(nose);
+// sonar cone (visual)
+const coneMat = new THREE.MeshBasicMaterial({ color: 0x3ee0c5, transparent: true, opacity: 0.12, depthWrite: false });
+const sonarCone = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true), coneMat);
+sonarCone.rotation.x = -Math.PI / 2; rover.add(sonarCone);
+// robot's eye camera (renders the inset)
+const povCam = new THREE.PerspectiveCamera(50, 16 / 9, 0.03, 20);
+rover.add(povCam); povCam.position.set(-0.022, 0.272, 0.08);
+povCam.rotation.set(0, Math.PI, 0);   // look forward (+z)
+
+// ------------------------------------------------------------------ room contents: target bottle + obstacles
+let target = null, boxes = [];
+function rng(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
+let roomSeed = 7;
+function buildRoom(seed) {
+  boxes.forEach(b => { scene.remove(b); solids.splice(solids.indexOf(b), 1); });
+  boxes = [];
+  if (target) { scene.remove(target); solids.splice(solids.indexOf(target), 1); }
+  const R = rng(seed);
+  // bottle somewhere in the far half
+  const tx = (R() - 0.5) * 3.2, tz = 1.0 + R() * 1.0;
+  target = new THREE.Group();
+  const bodyB = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.2, 24), new THREE.MeshStandardMaterial({ color: 0x5aa9e6, transparent: true, opacity: 0.85, roughness: 0.15 }));
+  bodyB.position.y = 0.1; target.add(bodyB);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.03, 0.04, 20), bodyB.material); neck.position.y = 0.22; target.add(neck);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.02, 20), new THREE.MeshStandardMaterial({ color: 0x1f6fd6 })); cap.position.y = 0.25; target.add(cap);
+  const labelB = new THREE.Mesh(new THREE.CylinderGeometry(0.0355, 0.0355, 0.06, 24), new THREE.MeshStandardMaterial({ color: 0xf4f4f4 })); labelB.position.y = 0.1; target.add(labelB);
+  target.position.set(tx, 0, tz); target.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  target.userData = { kind: 'target', name: 'bottle', r: 0.035 };
+  scene.add(target); solids.push(target);
+  // 2-3 cardboard boxes, one roughly between start and bottle
+  const spots = [[tx * 0.5 + (R() - 0.5) * 0.3, tz * 0.5 + 0.1]];
+  for (let i = 0; i < 2; i++) spots.push([(R() - 0.5) * 3.6, -1.6 + R() * 3.4]);
+  for (const [x, z] of spots) {
+    if (Math.hypot(x - tx, z - tz) < 0.55 || Math.hypot(x, z) < 0.5) continue;
+    const w = 0.22 + R() * 0.12, d = 0.22 + R() * 0.12, h = 0.18 + R() * 0.14;
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0xb08350, roughness: 0.85 }));
+    const tape = new THREE.Mesh(new THREE.BoxGeometry(w * 1.002, 0.02, 0.05), new THREE.MeshStandardMaterial({ color: 0xd8b98a })); tape.position.y = h / 2; b.add(tape);
+    b.position.set(x, h / 2, z); b.castShadow = b.receiveShadow = true;
+    b.userData = { kind: 'box', name: 'box', aabb: [x - w / 2, z - d / 2, x + w / 2, z + d / 2] };
+    scene.add(b); solids.push(b); boxes.push(b);
+  }
+  scene.updateMatrixWorld(true);          // so the sensors see the new room immediately
+}
+
+// ------------------------------------------------------------------ physics (differential drive)
+const VMAX = 0.42, DEAD = 20, TAU = 0.15, ROVER_R = 0.125;
+const st = { x: 0, z: -1.6, th: 0, vl: 0, vr: 0, rotL: 0, rotR: 0, collisions: 0, bumping: false };
+function resetRover() { const R = rng(roomSeed + 99); Object.assign(st, { x: (R() - 0.5) * 0.6, z: -1.7, th: (R() - 0.5) * 1.2, vl: 0, vr: 0, bumping: false }); }
+function wheelSpeed(pwm) { const a = Math.abs(pwm); return a <= DEAD ? 0 : Math.sign(pwm) * VMAX * a / 255; }   // geared BO motors stall below ~20 PWM
+function collides(x, z) {
+  for (const s of solids) {
+    if (s.userData.kind === 'target') { if (Math.hypot(x - s.position.x, z - s.position.z) < ROVER_R + 0.035) return s; continue; }
+    const [x1, z1, x2, z2] = s.userData.aabb;
+    const cx = Math.max(x1, Math.min(x, x2)), cz = Math.max(z1, Math.min(z, z2));
+    if (Math.hypot(x - cx, z - cz) < ROVER_R) return s;
+  }
+  return null;
+}
+function physics(dt, pwmL, pwmR) {
+  st.vl += (wheelSpeed(pwmL) - st.vl) * Math.min(1, dt / TAU);
+  st.vr += (wheelSpeed(pwmR) - st.vr) * Math.min(1, dt / TAU);
+  const v = (st.vl + st.vr) / 2, w = (st.vr - st.vl) / TRACK;
+  const th = st.th + w * dt;
+  const nx = st.x + v * Math.sin(th) * dt, nz = st.z + v * Math.cos(th) * dt;
+  const hit = collides(nx, nz);
+  st.th = th;
+  if (hit && hit.userData.kind !== 'target') {
+    if (fw.ms - (st.lastBump || -1e9) > 1500) { st.collisions++; logLine('<b>[physics]</b> bumped into ' + hit.userData.name); }
+    st.lastBump = fw.ms; st.bumping = true;
+    // push the rover back out along the contact normal: it slides along the box instead of sticking
+    let px = nx, pz = nz;
+    for (let it = 0; it < 3; it++) {
+      const s2 = collides(px, pz); if (!s2 || s2.userData.kind === 'target') break;
+      const [x1, z1, x2, z2] = s2.userData.aabb;
+      const cx = Math.max(x1, Math.min(px, x2)), cz = Math.max(z1, Math.min(pz, z2));
+      let ex = px - cx, ez = pz - cz, el = Math.hypot(ex, ez);
+      if (el < 1e-6) { ex = px - (x1 + x2) / 2; ez = pz - (z1 + z2) / 2; el = Math.hypot(ex, ez) || 1; }
+      px = cx + ex / el * (ROVER_R + 0.002); pz = cz + ez / el * (ROVER_R + 0.002);
+    }
+    if (!collides(px, pz)) { st.x = px; st.z = pz; }
+    st.vl *= 0.7; st.vr *= 0.7;
+  } else { st.bumping = false; if (!hit) { st.x = nx; st.z = nz; } }
+  st.rotL += st.vl / WHEEL_R * dt; st.rotR += st.vr / WHEEL_R * dt;
+}
+
+// ------------------------------------------------------------------ HC-SR04: three rays in a ~15 deg cone
+const ray = new THREE.Raycaster();
+function sonarCm() {
+  const origin = new THREE.Vector3(st.x + 0.112 * Math.sin(st.th), 0.06, st.z + 0.112 * Math.cos(st.th));
+  let best = Infinity;
+  for (const a of [-0.13, 0, 0.13]) {
+    ray.set(origin, new THREE.Vector3(Math.sin(st.th + a), 0, Math.cos(st.th + a)));
+    ray.far = 4.0;
+    const hits = ray.intersectObjects(solids, true);
+    if (hits.length) best = Math.min(best, hits[0].distance);
+  }
+  return best === Infinity ? 999 : Math.round(best * 100);
+}
+
+// ------------------------------------------------------------------ FIRMWARE (port of sightseeker_rover.ino, same rules)
+const fw = { cmdL: 0, cmdR: 0, outL: 0, outR: 0, dist: 999, blocked: false, wdStop: true, lastCmd: -1e9, ms: 0, pins: {} };
+const STOP_CM = 25, WATCHDOG_MS = 500;
+function fwApply() {
+  let l = fw.cmdL, r = fw.cmdR;
+  fw.blocked = fw.dist < STOP_CM && l > 0 && r > 0;          // never drive forward into something close
+  if (fw.blocked || fw.wdStop) { l = 0; r = 0; }
+  fw.outL = Math.max(-255, Math.min(255, l)); fw.outR = Math.max(-255, Math.min(255, r));
+  fw.pins = { IN1: fw.outL > 0, IN2: fw.outL < 0, ENA: Math.abs(fw.outL), IN3: fw.outR > 0, IN4: fw.outR < 0, ENB: Math.abs(fw.outR) };
+}
+function fwSerial(line) {                                      // "L<int>,R<int>"
+  const m = /^L(-?\d+),R(-?\d+)$/.exec(line);
+  if (!m) return;
+  fw.cmdL = +m[1]; fw.cmdR = +m[2]; fw.lastCmd = fw.ms; fw.wdStop = false; fwApply();
+}
+let lastPing = 0;
+function fwLoop() {
+  if (fw.ms - lastPing > 60) { lastPing = fw.ms; fw.dist = sonarCm(); fwApply(); }
+  if (!fw.wdStop && fw.ms - fw.lastCmd > WATCHDOG_MS) {
+    fw.wdStop = true; fw.cmdL = fw.cmdR = 0; fwApply();
+    logLine('<b>[safety]</b> no command for 500 ms -> motors stopped');
+  }
+}
+
+// ------------------------------------------------------------------ the laptop side
+// Mode 1: emulated Vision Brain (same state machine and steering law as yolo_detection.py's NavBrain)
+const HFOV = 70 * Math.PI / 180;
+const brain = { state: 'SEARCHING', cmd: 'ROTATE RIGHT', motor: [0, 0], side: 1, t0: 0, done: false, seen: false, obstacle: null };
+function wrap(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+function lineOfSight(x, z, tx, tz) {
+  const o = new THREE.Vector3(x, 0.15, z), d = new THREE.Vector3(tx - x, 0, tz - z); const len = d.length(); d.normalize();
+  ray.set(o, d); ray.far = len - 0.05;
+  return !ray.intersectObjects(solids.filter(s => s !== target), true).length;
+}
+function brainStep() {
+  const camX = st.x + 0.08 * Math.sin(st.th), camZ = st.z + 0.08 * Math.cos(st.th);
+  // what the camera sees (YOLO stand-in): target and boxes inside the 70 deg view, not hidden
+  let tgt = null;
+  {
+    const dx = target.position.x - camX, dz = target.position.z - camZ, dist = Math.hypot(dx, dz);
+    const bearing = wrap(st.th - Math.atan2(dx, dz));
+    if (Math.abs(bearing) < HFOV / 2 && dist < 4.5 && lineOfSight(camX, camZ, target.position.x, target.position.z))
+      tgt = { bearing, dist, close: Math.min(1, 0.21 / dist) };          // fraction of the frame height the bottle fills
+  }
+  // a box counts as an obstacle when it is in view AND inside the strip of floor the rover is about to drive
+  // over (the "path corridor" of the real Vision Brain), within 0.9 m
+  let obst = null;
+  for (const b of boxes) {
+    const [x1, z1, x2, z2] = b.userData.aabb, rb = Math.hypot(x2 - x1, z2 - z1) / 2;
+    const dx = b.position.x - camX, dz = b.position.z - camZ, d = Math.hypot(dx, dz);
+    const bearing = wrap(st.th - Math.atan2(dx, dz));
+    const fwd = Math.cos(bearing) * d, lat = Math.sin(bearing) * d;             // rover frame, + lat = right
+    const visible = Math.abs(bearing) < HFOV / 2 + Math.atan2(rb, Math.max(0.05, d));
+    if (visible && fwd > 0 && fwd - rb < 0.9 && Math.abs(lat) < rb + ROVER_R + 0.06) {
+      const dist = Math.max(0.02, fwd - rb);
+      if (!obst || dist < obst.dist) obst = { bearing, lat, dist, close: Math.min(1, 0.3 / dist) };
+    }
+  }
+  const STOP_AT = 0.6;
+  let state;
+  if (tgt && tgt.close >= STOP_AT) state = 'GOAL_REACHED';
+  else if (brain.state === 'GOAL_REACHED' && (!tgt || tgt.close >= 0.85 * STOP_AT)) state = 'GOAL_REACHED';
+  else if (obst && (!tgt || obst.close > tgt.close)) state = 'AVOIDING';
+  else if (tgt) state = 'NAVIGATING';
+  else state = 'SEARCHING';
+  let l, r, cmd;
+  const err = tgt ? tgt.bearing / (HFOV / 2) : 0;           // + = target on the right
+  const memo = brain.lastSeen;
+  if (state === 'SEARCHING' && memo && fw.ms - memo.t < 6000 && Math.hypot(memo.x - st.x, memo.z - st.z) > 0.6 && !fw.blocked) {
+    // lost sight of it (hidden behind a box): head to where it was last seen, from there it is visible again
+    const e = wrap(st.th - Math.atan2(memo.x - st.x, memo.z - st.z)) / (HFOV / 2);
+    const turn = Math.max(-0.5, Math.min(0.5, 0.6 * e));
+    l = 0.5 + turn; r = 0.5 - turn; cmd = 'HEAD TO LAST SEEN';
+  } else if (state === 'SEARCHING' && brain.explore && fw.ms < brain.explore.until) {
+    // a full 360 scan found nothing: drive toward the most open direction, then scan again
+    const e = wrap(st.th - brain.explore.heading) / (HFOV / 2);
+    const turn = Math.max(-0.5, Math.min(0.5, 0.6 * e));
+    l = 0.5 + turn; r = 0.5 - turn; cmd = 'EXPLORE (open space)';
+    if (fw.blocked) brain.explore.until = 0;
+  } else if (state === 'SEARCHING') {
+    if (brain.explore) { brain.explore = null; brain.scanned = 0; }
+    brain.scanned = (brain.scanned || 0) + 0.05 * Math.abs((st.vr - st.vl) / TRACK);
+    if (brain.scanned > 2 * Math.PI) {
+      let best = 0, bestD = -1;
+      for (let i = 0; i < 16; i++) {
+        const a = i / 16 * 2 * Math.PI;
+        ray.set(new THREE.Vector3(st.x, 0.1, st.z), new THREE.Vector3(Math.sin(a), 0, Math.cos(a))); ray.far = 5;
+        const h = ray.intersectObjects(solids, true); const d = h.length ? h[0].distance : 5;
+        const novelty = Math.hypot(st.x + Math.sin(a) - (brain.lastExploreX || 0), st.z + Math.cos(a) - (brain.lastExploreZ || -1.7));
+        const score = Math.min(d, 2.5) + 0.4 * novelty;
+        if (d > 0.8 && score > bestD) { bestD = score; best = a; }
+      }
+      brain.lastExploreX = st.x; brain.lastExploreZ = st.z;
+      brain.explore = { heading: best, until: fw.ms + 3500 };
+      logLine('<b>[brain]</b> 360 scan: bottle not in view -> exploring open space');
+    }
+    l = 0.35 * brain.side; r = -0.35 * brain.side; cmd = 'ROTATE ' + (brain.side > 0 ? 'RIGHT' : 'LEFT') + ' (scanning)';
+  }
+  else if (state === 'NAVIGATING') {
+    brain.side = err >= 0 ? 1 : -1;
+    const base = 0.65 * Math.max(0.25, Math.min(1, 1 - tgt.close / STOP_AT)), turn = 0.55 * err;
+    l = base + turn; r = base - turn;
+    cmd = Math.abs(err) < 0.15 ? 'FORWARD' : (err > 0 ? 'TURN RIGHT' : 'TURN LEFT');
+  } else if (state === 'AVOIDING') {
+    const dir = obst.lat >= 0 ? -1 : 1;                      // box on the right -> veer left
+    brain.side = dir;                                         // and keep scanning that way afterwards
+    l = 0.12 + 0.45 * dir; r = 0.12 - 0.45 * dir;
+    cmd = 'AVOID BOX -> ' + (dir > 0 ? 'RIGHT' : 'LEFT');
+  } else { l = r = 0; cmd = 'STOP - GOAL REACHED'; }
+  if (state === 'NAVIGATING') {
+    brain.lastSeen = { x: target.position.x, z: target.position.z, t: fw.ms };
+    if (brain.navSince == null) brain.navSince = fw.ms;
+    if (fw.ms - brain.navSince > 1500) { brain.explore = null; brain.scanned = 0; }   // a real sighting, not a glimpse
+  } else brain.navSince = null;
+  if (state === 'GOAL_REACHED') { brain.explore = null; brain.scanned = 0; }
+  if (state !== brain.state) {
+    if (state === 'NAVIGATING' && brain.state === 'SEARCHING') logLine('<b>[brain]</b> target acquired: bottle');
+    if (state === 'AVOIDING') logLine('<b>[brain]</b> box in path -> ' + cmd.split('-> ')[1].toLowerCase());
+    if (state === 'GOAL_REACHED') {
+      const t = (fw.ms - brain.t0) / 1000;
+      logLine('<b>[brain]</b> GOAL REACHED in ' + t.toFixed(1) + ' s');
+      showBanner('Goal reached in ' + t.toFixed(1) + ' s · ' + st.collisions + ' bumps · a new room in 4 s');
+      brain.doneAt = fw.ms;
+    }
+  }
+  brain.state = state; brain.cmd = cmd; brain.tgt = tgt;
+  brain.motor[0] = 0.55 * brain.motor[0] + 0.45 * Math.max(-1, Math.min(1, l));
+  brain.motor[1] = 0.55 * brain.motor[1] + 0.45 * Math.max(-1, Math.min(1, r));
+  if (state === 'GOAL_REACHED') brain.motor = [0, 0];
+  return 'L' + Math.round(brain.motor[0] * 255) + ',R' + Math.round(brain.motor[1] * 255);
+}
+// Mode 2: the exact demo sequence of the Wokwi sketch
+const DEMO = [[90, -90, 3000, true, 'SEARCH: scan right'], [110, 200, 2000, true, 'TARGET: turn left'], [180, 180, 3000, true, 'NAVIGATE: forward'],
+  [40, 210, 2000, true, 'AVOID: obstacle->left'], [170, 180, 2500, true, 'NAVIGATE: forward'], [0, 0, 2500, true, 'GOAL REACHED: stop'],
+  [150, 150, 1500, true, 'NAVIGATE: forward'], [150, 150, 2500, false, 'LINK LOST: no cmds']];
+let demoStep = -1, demoStart = 0;
+// Mode 3: arrow keys
+const keys = {};
+
+let mode = 'auto', lastSend = 0, serialShown = '-';
+function setMode(m) {
+  mode = m; ['auto', 'demo', 'man'].forEach(k => document.getElementById('m-' + k).classList.toggle('on', k === m));
+  demoStep = -1; brain.state = 'SEARCHING'; brain.motor = [0, 0]; brain.t0 = fw.ms; brain.doneAt = null; brain.explore = null; brain.scanned = 0; brain.lastSeen = null;
+  if (m === 'auto' || m === 'demo') { st.collisions = 0; }
+  logLine('<b>[mode]</b> ' + { auto: 'find the bottle (emulated Vision Brain)', demo: 'Wokwi demo replay', man: 'manual: arrow keys send commands' }[m]);
+}
+function laptopStep() {
+  if (fw.ms - lastSend < 50) return;                         // 20 commands per second, like the real link
+  lastSend = fw.ms;
+  let line = null;
+  if (mode === 'auto') {
+    if (brain.doneAt != null && fw.ms - brain.doneAt > 4000) { newRoom(); return; }
+    line = brainStep();
+  } else if (mode === 'demo') {
+    if (demoStep < 0 || fw.ms - demoStart >= DEMO[demoStep][2]) {
+      demoStep = (demoStep + 1) % DEMO.length; demoStart = fw.ms;
+      logLine('[demo] ' + DEMO[demoStep][4]);
+    }
+    const s = DEMO[demoStep];
+    brain.state = s[4].split(':')[0].replace('TARGET', 'NAVIGATING').replace('NAVIGATE', 'NAVIGATING').replace('SEARCH', 'SEARCHING').replace('AVOID', 'AVOIDING').replace('GOAL REACHED', 'GOAL_REACHED').replace('LINK LOST', 'LINK LOST');
+    brain.cmd = s[4].split(': ')[1];
+    if (s[3]) line = 'L' + s[0] + ',R' + s[1];
+  } else {
+    const f = (keys.ArrowUp ? 1 : 0) - (keys.ArrowDown ? 1 : 0), t = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
+    if (f || t) {
+      const l = Math.round(170 * f + 120 * t), r = Math.round(170 * f - 120 * t);
+      line = 'L' + l + ',R' + r;
+      brain.state = 'MANUAL'; brain.cmd = f > 0 ? 'FORWARD' : f < 0 ? 'REVERSE' : (t > 0 ? 'SPIN RIGHT' : 'SPIN LEFT');
+    } else { brain.state = 'MANUAL'; brain.cmd = 'no key -> no commands'; }
+  }
+  if (line) { fwSerial(line); serialShown = line; } else serialShown = '(nothing sent)';
+}
+
+// ------------------------------------------------------------------ UI
+const $ = id => document.getElementById(id);
+const logEl = $('log'); const logLines = [];
+function logLine(html) { logLines.push(html); while (logLines.length > 8) logLines.shift(); logEl.innerHTML = logLines.join('<br>'); }
+let bannerT = null;
+function showBanner(t) { $('banner').textContent = t; $('banner').classList.add('show'); clearTimeout(bannerT); bannerT = setTimeout(() => $('banner').classList.remove('show'), 3800); }
+const STATE_COL = { SEARCHING: '#ffb547', NAVIGATING: '#5bd67a', AVOIDING: '#ff5468', GOAL_REACHED: '#3ee0c5', MANUAL: '#9aa8c4', 'LINK LOST': '#ff5468' };
+function bar(fill, val, v) { const w = Math.abs(v) / 255 * 50; fill.style.width = w + '%'; fill.style.left = (v >= 0 ? 50 : 50 - w) + '%'; fill.style.background = v >= 0 ? '#5bd67a' : '#ff5468'; val.textContent = (v > 0 ? '+' : '') + v; }
+function led(id, on, col, level) { const e = $(id); const a = level == null ? (on ? 1 : 0) : level / 255; e.style.background = a > 0 ? col : '#26304a'; e.style.opacity = a > 0 ? (0.35 + 0.65 * a) : 1; e.style.boxShadow = a > 0 ? '0 0 10px ' + col : 'none'; }
+function ui() {
+  const s = $('state'); s.textContent = brain.state.replace('_', ' '); s.style.color = STATE_COL[brain.state] || '#eef3fb';
+  $('cmd').textContent = brain.cmd;
+  $('serial').textContent = serialShown;
+  bar($('fl'), $('vl'), fw.outL); bar($('fr'), $('vr'), fw.outR);
+  led('p-in1', fw.pins.IN1, '#5bd67a'); led('p-in2', fw.pins.IN2, '#ff5468'); led('p-ena', 0, '#ffb547', fw.pins.ENA);
+  led('p-in3', fw.pins.IN3, '#5bd67a'); led('p-in4', fw.pins.IN4, '#ff5468'); led('p-enb', 0, '#ffb547', fw.pins.ENB);
+  $('dist').textContent = fw.dist >= 999 ? 'no echo' : fw.dist + ' cm';
+  const sf = $('safety');
+  if (fw.wdStop) { sf.textContent = 'WATCHDOG: no command for 500 ms -> stopped'; sf.style.color = '#ff5468'; }
+  else if (fw.blocked) { sf.textContent = 'TOO CLOSE: forward blocked by the firmware'; sf.style.color = '#ff5468'; }
+  else { sf.textContent = 'OK: motors follow the commands'; sf.style.color = '#5bd67a'; }
+  $('mission').textContent = 't = ' + ((fw.ms - brain.t0) / 1000).toFixed(1) + ' s · bumps ' + st.collisions;
+}
+for (const [id, m] of [['m-auto', 'auto'], ['m-demo', 'demo'], ['m-man', 'man']]) $(id).addEventListener('click', () => setMode(m));
+
+// exploded view + part labels
+let exploded = 0, explodeTarget = 0;
+const labelBox = $('labels');
+const labelEls = parts.filter(p => p.lift > 0 || /motor|wheel|chassis/i.test(p.label)).map(p => {
+  const d = document.createElement('div'); d.className = 'lab'; d.innerHTML = p.label + '<small>' + p.sub + '</small>'; d.style.display = 'none'; labelBox.appendChild(d); return { p, d };
+});
+const leaders = document.getElementById('leaders');
+function placeLabels() {
+  const show = exploded > 0.6, w = innerWidth, h = innerHeight, v = new THREE.Vector3();
+  leaders.innerHTML = '';
+  if (!show) { labelEls.forEach(({ d }) => { d.style.display = 'none'; }); return; }
+  const pts = labelEls.map(({ p, d }) => { p.mesh.getWorldPosition(v); v.y += 0.01; v.project(camera);
+    return { d, x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h, ok: v.z < 1 }; });
+  const cx = pts.reduce((a, q) => a + q.x, 0) / pts.length;
+  const cols = [pts.filter((q, i) => i % 2 === 0), pts.filter((q, i) => i % 2 === 1)];
+  cols.forEach((col, side) => {
+    col.sort((a, b2) => a.y - b2.y);
+    const n = col.length, top = Math.max(110, h / 2 - n * 26), x = side ? cx + 260 : cx - 260;
+    col.forEach((q, i) => {
+      const ly = top + i * 52 + 20;
+      q.d.style.display = q.ok ? 'block' : 'none';
+      q.d.style.left = x + 'px'; q.d.style.top = ly + 'px';
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', x + (side ? -70 : 70)); line.setAttribute('y1', ly - 12);
+      line.setAttribute('x2', q.x); line.setAttribute('y2', q.y);
+      line.setAttribute('stroke', 'rgba(255,181,71,.75)'); line.setAttribute('stroke-width', '1.3');
+      leaders.appendChild(line);
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('cx', q.x); dot.setAttribute('cy', q.y); dot.setAttribute('r', '3'); dot.setAttribute('fill', '#ffb547');
+      leaders.appendChild(dot);
+    });
+  });
+}
+
+// phone-camera inset with a YOLO-style box on the bottle
+const pov = $('pov-boxes'); const pctx = pov.getContext('2d');
+function povOverlay(rect) {
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  if (pov.width !== rect.w * dpr) { pov.width = rect.w * dpr; pov.height = rect.h * dpr; }
+  pctx.setTransform(dpr, 0, 0, dpr, 0, 0); pctx.clearRect(0, 0, rect.w, rect.h);
+  pctx.strokeStyle = 'rgba(62,224,197,.9)'; pctx.lineWidth = 1.5; pctx.strokeRect(0.75, 0.75, rect.w - 1.5, rect.h - 1.5);
+  if (!(mode === 'auto' && brain.tgt)) return;
+  const box = new THREE.Box3().setFromObject(target), pts = [];
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) pts.push(new THREE.Vector3(x, y, z).project(povCam));
+  const xs = pts.map(p => (p.x + 1) / 2 * rect.w), ys = pts.map(p => (1 - p.y) / 2 * rect.h);
+  const x1 = Math.max(0, Math.min(...xs)), x2 = Math.min(rect.w, Math.max(...xs)), y1 = Math.max(0, Math.min(...ys)), y2 = Math.min(rect.h, Math.max(...ys));
+  if (x2 <= x1 || y2 <= y1) return;
+  pctx.strokeStyle = '#5bd67a'; pctx.lineWidth = 2; pctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+  const t = 'bottle ' + (0.95 - Math.min(0.3, brain.tgt.dist * 0.08)).toFixed(2) + ' · ~' + Math.round(brain.tgt.dist * 100) + ' cm';
+  pctx.font = '600 11px Consolas, monospace'; const tw = pctx.measureText(t).width + 8;
+  pctx.fillStyle = '#5bd67a'; pctx.fillRect(x1, Math.max(0, y1 - 15), tw, 15); pctx.fillStyle = '#0d1220'; pctx.fillText(t, x1 + 4, Math.max(11, y1 - 4));
+}
+
+// keys
+let paused = false, camMode = 1;                 // 1 = chase (default), 0 = free orbit, 2 = top view
+addEventListener('keydown', e => {
+  if (e.key.startsWith('Arrow')) { keys[e.key] = true; e.preventDefault(); if (mode !== 'man') setMode('man'); }
+  else if (e.key === '1') setMode('auto'); else if (e.key === '2') setMode('demo'); else if (e.key === '3') setMode('man');
+  else if (e.key === 'e' || e.key === 'E') { explodeTarget = explodeTarget ? 0 : 1; camMode = explodeTarget ? 0 : 1; }
+  else if (e.key === 'c' || e.key === 'C') camMode = (camMode + 1) % 3;
+  else if (e.key === 'n' || e.key === 'N') newRoom();
+  else if (e.key === ' ') { paused = !paused; e.preventDefault(); }
+});
+addEventListener('keyup', e => { if (e.key.startsWith('Arrow')) keys[e.key] = false; });
+function newRoom() { roomSeed = (roomSeed * 7 + 13) % 100003; buildRoom(roomSeed); resetRover(); brain.state = 'SEARCHING'; brain.motor = [0, 0]; brain.t0 = fw.ms; brain.doneAt = null; brain.explore = null; brain.scanned = 0; brain.lastSeen = null; st.collisions = 0; logLine('<b>[room]</b> new layout'); }
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+
+// ------------------------------------------------------------------ main loop
+buildRoom(roomSeed); resetRover(); setMode('auto');
+logLine('SightSeeker rover twin. Same firmware rules: 500 ms watchdog, 25 cm forward stop.');
+let last = performance.now();
+const tmp = new THREE.Vector3();
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (paused) dt = 0;
+  // fixed 5 ms firmware/physics steps
+  let acc = dt;
+  while (acc > 1e-6) {
+    const h = Math.min(0.005, acc); acc -= h;
+    fw.ms += h * 1000;
+    laptopStep(); fwLoop(); physics(h, fw.outL, fw.outR);
+  }
+  rover.position.set(st.x, 0, st.z); rover.rotation.y = st.th;
+  wheels[0].children.forEach(c => { if (c.geometry.type !== 'BoxGeometry') return; });
+  wheels[0].rotation.x = st.rotL; wheels[1].rotation.x = st.rotR;
+  // sonar cone length = measured distance
+  const len = Math.min(fw.dist, 120) / 100;
+  sonarCone.scale.set(len * 0.13, len, len * 0.13); sonarCone.position.set(0, 0.06, 0.112 + len / 2);
+  coneMat.color.set(fw.blocked ? 0xff5468 : 0x3ee0c5); coneMat.opacity = fw.blocked ? 0.28 : 0.12;
+  // exploded view
+  exploded += (explodeTarget - exploded) * Math.min(1, dt * 4 || 0.08);
+  for (const p of parts) p.mesh.position.y = p.base.y + p.lift * exploded;
+  // cameras
+  if (camMode === 1) {                 // chase
+    tmp.set(st.x - 0.75 * Math.sin(st.th), 0.55, st.z - 0.75 * Math.cos(st.th));
+    camera.position.lerp(tmp, 0.08); controls.target.lerp(new THREE.Vector3(st.x, 0.08, st.z), 0.2); camera.lookAt(controls.target);
+  } else if (camMode === 2) {          // top
+    camera.position.lerp(tmp.set(0, 6.2, -0.01), 0.08); controls.target.lerp(new THREE.Vector3(0, 0, 0), 0.2); camera.lookAt(controls.target);
+  } else {
+    const want = new THREE.Vector3(st.x, 0.08 + 0.12 * exploded, st.z);
+    const delta = want.clone().sub(controls.target).multiplyScalar(0.12);
+    controls.target.add(delta); camera.position.add(delta);          // follow the rover, keep the orbit
+    if (explodeTarget && camera.position.distanceTo(controls.target) > 0.85) camera.position.lerp(controls.target, 0.06);
+    controls.update();
+  }
+  // main view + phone inset
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, innerWidth, innerHeight);
+  renderer.render(scene, camera);
+  const r = $('pov').getBoundingClientRect();
+  const rect = { x: r.left, y: r.top, w: r.width, h: r.height };
+  renderer.setScissorTest(true);
+  renderer.setScissor(rect.x, innerHeight - rect.y - rect.h, rect.w, rect.h);
+  renderer.setViewport(rect.x, innerHeight - rect.y - rect.h, rect.w, rect.h);
+  povCam.aspect = rect.w / rect.h; povCam.updateProjectionMatrix();
+  sonarCone.visible = false; renderer.render(scene, povCam); sonarCone.visible = true;
+  renderer.setScissorTest(false);
+  povOverlay(rect);
+  placeLabels();
+  ui();
+}
+requestAnimationFrame(frame);
+function simulate(sec) {               // headless fast-forward, used by the automated tests
+  for (let t = 0; t < sec; t += 0.005) { fw.ms += 5; laptopStep(); fwLoop(); physics(0.005, fw.outL, fw.outR); }
+}
+window.RoverTwin = { scene, st, fw, brain, setMode, newRoom, simulate, get mode() { return mode; }, explode: v => { explodeTarget = v; } };
+})();
+</script>
+</body>
+</html>
