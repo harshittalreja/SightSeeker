@@ -150,5 +150,5 @@ The rover's firmware, wiring diagram, component specs, a **Wokwi simulation** yo
 
 ## Presentation
 
-- Prototype-round deck: [docs/SightSeeker_PrototypeRound.pdf](docs/SightSeeker_PrototypeRound.pdf)
+- Prototype-round deck (official Hack in Hills template): [PDF](docs/SightSeeker_PrototypeRound.pdf) · [PowerPoint](docs/SightSeeker_PrototypeRound.pptx)
 - Interactive pitch: `SightSeeker_Pitch.html` (open in a browser, or `launch.bat` option 1)
